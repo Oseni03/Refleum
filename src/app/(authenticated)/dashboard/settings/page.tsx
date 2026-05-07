@@ -38,6 +38,7 @@ import { useOrganizationStore } from "@/zustand/providers/organization-store-pro
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
+
 export default function SettingsPage() {
     const { activeOrganization, isAdmin, deleteOrganization } =
         useOrganizationStore((state) => state);

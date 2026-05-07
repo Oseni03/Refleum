@@ -1,74 +1,50 @@
-import React from "react";
-import Header from "@/components/homepage/header";
-import Footer from "@/components/homepage/footer";
 import { siteConfig } from "@/config/site";
+import type { Metadata } from "next";
 
-export const metadata = {
-	title: `About - ${siteConfig.name}`,
-	description: `Learn more about ${siteConfig.name} and our mission.`,
+export const metadata: Metadata = {
+    title: `About — ${siteConfig.name}`,
+    description: siteConfig.description,
 };
 
-export default function AboutPage() {
-	return (
-		<div className="flex flex-col min-h-screen">
-			<Header />
-			<main className="flex-1">
-				<section className="py-24 px-4 bg-background">
-					<div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-						<div className="space-y-4 text-center">
-							<h1 className="text-4xl md:text-6xl font-bold tracking-tight text-foreground">
-								Our Mission
-							</h1>
-							<p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-								We&apos;re building the foundation for the next
-								generation of SaaS applications.
-							</p>
-						</div>
+export default function AboutPage(): React.ReactElement {
+    return (
+        <main className="max-w-3xl mx-auto px-6 py-16 space-y-12">
+            <div className="space-y-4">
+                <h1 className="text-4xl font-bold text-foreground">{siteConfig.name}</h1>
+                <p className="text-lg text-muted-foreground">{siteConfig.tagline}</p>
+                <p className="text-muted-foreground">{siteConfig.description}</p>
+            </div>
 
-						<div className="prose prose-zinc dark:prose-invert max-w-none">
-							<p className="text-lg leading-relaxed text-foreground/80">
-								{siteConfig.name} was born out of the
-								frustration of repeating the same boilerplate
-								code over and over again. We believe that
-								developers should spend their time building
-								features that matter, not setting up
-								authentication, billing, and database
-								connections.
-							</p>
-							<p className="text-lg leading-relaxed text-foreground/80">
-								Our goal is to provide a rock-solid,
-								production-ready foundation that follows all the
-								best practices, so you can launch your product
-								in days instead of months.
-							</p>
+            <div className="space-y-6">
+                <h2 className="text-2xl font-semibold text-foreground">What we do</h2>
+                <div className="grid gap-5 sm:grid-cols-2">
+                    {siteConfig.features.map((feature) => (
+                        <div key={feature.title} className="space-y-1.5 p-4 rounded-lg border border-border bg-card">
+                            <h3 className="text-sm font-semibold text-foreground">{feature.title}</h3>
+                            <p className="text-sm text-muted-foreground">{feature.description}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-8 my-16 not-prose">
-								<div className="p-8 rounded-3xl border border-border bg-muted/50 space-y-4">
-									<h3 className="text-xl font-bold">
-										Velocity
-									</h3>
-									<p className="text-muted-foreground">
-										Go from idea to production faster than
-										ever before with pre-built components
-										and integrations.
-									</p>
-								</div>
-								<div className="p-8 rounded-3xl border border-border bg-muted/50 space-y-4">
-									<h3 className="text-xl font-bold">
-										Quality
-									</h3>
-									<p className="text-muted-foreground">
-										Built with industry standards including
-										TypeScript, Next.js, and best-in-class
-										security practices.
-									</p>
-								</div>
-							</div>
-						</div>
-					</div>
-				</section>
-			</main>
-			<Footer />
-		</div>
-	);
+            <div className="space-y-3 text-sm text-muted-foreground">
+                <h2 className="text-2xl font-semibold text-foreground">Our commitment</h2>
+                <p>
+                    {siteConfig.name} is built on a single principle: your resume should reflect your actual
+                    experience. Our AI never invents skills, companies, metrics, or responsibilities. Every
+                    change is grounded in what you&apos;ve already told us — we only help you say it better.
+                </p>
+                <p>
+                    We support multiple AI providers (OpenAI, Anthropic, Google Gemini, and local models via
+                    Ollama) so you can choose the model that best fits your needs and budget.
+                </p>
+            </div>
+        </main>
+    );
 }
+
+// ─── Privacy Page ──────────────────────────────────────────────────────────────
+// src/app/(public)/privacy/page.tsx — save separately if preferred
+
+// ─── Terms Page ────────────────────────────────────────────────────────────────
+// src/app/(public)/terms/page.tsx — save separately if preferred

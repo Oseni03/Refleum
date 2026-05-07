@@ -6,7 +6,8 @@ import {
     magicLink,
     twoFactor,
 } from "better-auth/plugins";
-import { admin, member } from "./auth/permissions";
+import { apiKey } from "@better-auth/api-key"
+import { admin, member } from "./permissions";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 import {
@@ -22,6 +23,7 @@ import { sendEmail } from "./resend";
 import OrganizationInvitationEmail from "@/components/emails/organization-invitation-email";
 import MagicLinkEmail from "@/components/emails/magic-link-email";
 import { User } from "@prisma/client";
+import { siteConfig } from "@/config/site";
 
 const polarClient = new Polar({
     accessToken: process.env.POLAR_ACCESS_TOKEN!,
@@ -186,7 +188,16 @@ export const auth = betterAuth({
             },
         }),
         twoFactor({
-            issuer: "Multi-tenant SaaS Boilerplate",
+            issuer: siteConfig.name,
+        }),
+        apiKey({
+            defaultKeyLength: 32,
+            rateLimit: {
+                enabled: true,
+                timeWindow: 60,       // seconds
+                maxRequests: 100,         // requests per window per key
+            },
+            references: "organization",
         }),
         nextCookies(),
     ],

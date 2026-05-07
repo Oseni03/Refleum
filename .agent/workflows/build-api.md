@@ -19,7 +19,7 @@ description: >
 
 | Format | How to invoke |
 |---|---|
-| Inline description | `/build-api Create a projects CRUD API` |
+| Inline description requireApiKey| `/build-api Create a projects CRUD API` |
 | Attached PRD | `/build-api` then attach or `@` reference a `.md` / `.txt` file |
 | Pasted PRD | `/build-api` then paste the PRD body into the chat |
 
