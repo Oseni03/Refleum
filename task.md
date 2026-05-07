@@ -1,0 +1,16 @@
+- [x] Step 3: Server Layer
+  - [x] src/server/resumes.ts
+  - [x] src/server/cover-letters.ts
+  - [x] src/server/outreach.ts
+  - [x] src/server/subscription.ts
+  - [x] src/server/organizations.ts
+- [x] Step 4: API Key Plugin
+- [x] Step 5: Middleware
+- [ ] Step 6: Route Handlers
+  - [ ] /api/v1/resumes/*
+  - [ ] /api/v1/cover-letters/*
+  - [ ] /api/v1/outreach/*
+  - [ ] /api/v1/subscription/*
+- [ ] Step 7: UI
+- [ ] Step 8: Types
+- [ ] Step 9: Docs

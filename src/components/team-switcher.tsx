@@ -29,8 +29,8 @@ import {
 } from "./ui/dialog";
 import { CreateOrganizationForm } from "./forms/create-organization-form";
 import { useOrganizationStore } from "@/zustand/providers/organization-store-provider";
-import { cn, getPlanByProductId } from "@/lib/utils";
-import Image from "next/image"; // ← Added
+import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 export function TeamSwitcher() {
     const { isMobile } = useSidebar();
@@ -60,9 +60,7 @@ export function TeamSwitcher() {
         }
     }, [activeOrganization, organizations, handleChangeOrganization]);
 
-    const plan = getPlanByProductId(
-        activeOrganization?.subscription?.productId || "",
-    );
+    const plan = activeOrganization?.subscription?.plan || "FREE";
 
     return (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -89,7 +87,7 @@ export function TeamSwitcher() {
                                             {activeOrganization?.name}
                                         </span>
                                         <span className="text-[9px] text-muted-foreground uppercase tracking-[0.2em] font-medium opacity-50">
-                                            {plan ? plan.name : "Free Team"}
+                                            {plan}
                                         </span>
                                     </div>
                                 </div>

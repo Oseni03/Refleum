@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "date-fns";
 import { useBilling } from "@/hooks/use-billing";
+import { SUBSCRIPTION_PLANS, FREE_PLAN } from "@/lib/utils";
 
 export default function BillingPage() {
     const {
@@ -24,15 +25,22 @@ export default function BillingPage() {
         subscription,
         isLoading,
         error,
+        plan,
         handleSubscriptionAction,
-        currentPlan,
-        planName,
     } = useBilling();
+
+    const currentPlan = SUBSCRIPTION_PLANS.find((p) => p.id === plan) || FREE_PLAN;
+    const planName = currentPlan.name;
 
     // Calculate usage metrics
     const currentMemberCount = members.length;
-    const maxMembers =
-        currentPlan?.id === "free" ? 3 : currentPlan?.id === "pro" ? 10 : 3;
+    const maxMembersMap: Record<string, number> = {
+        FREE: 3,
+        STARTER: 10,
+        PRO: 100,
+        ENTERPRISE: 1000,
+    };
+    const maxMembers = maxMembersMap[plan] || 3;
     const usagePercentage = Math.min(
         (currentMemberCount / maxMembers) * 100,
         100,
@@ -91,10 +99,10 @@ export default function BillingPage() {
                                 <div className="flex items-center gap-2.5 text-[10px] font-medium  uppercase tracking-widest opacity-40">
                                     <Calendar className="size-3.5" />
                                     Next Billing Date:{" "}
-                                    {formatDate(
+                                    {subscription.currentPeriodEnd ? formatDate(
                                         new Date(subscription.currentPeriodEnd),
                                         "dd LLL yyyy",
-                                    )}
+                                    ) : "N/A"}
                                 </div>
                             )}
                         </div>
@@ -129,7 +137,7 @@ export default function BillingPage() {
                                     style={{ width: `${usagePercentage}%` }}
                                 />
                             </div>
-                            <div className="flex items-center gap-2.5 text-[9px] font-medium /40 uppercase tracking-widest">
+                            <div className="flex items-center gap-2.5 text-[9px] font-medium opacity-40 uppercase tracking-widest">
                                 <Info className="size-3.5" />
                                 {maxMembers - currentMemberCount > 0
                                     ? `${maxMembers - currentMemberCount} More members can be added to your current plan.`
@@ -143,7 +151,7 @@ export default function BillingPage() {
                             Upgrade Plan
                             <ArrowRight className="size-3.5 transition-transform group-hover/btn:translate-x-1.5" />
                         </button>
-                        <button className="text-[10px] font-medium uppercase tracking-[0.2em] /40 hover:text-destructive transition-colors">
+                        <button className="text-[10px] font-medium uppercase tracking-[0.2em] opacity-40 hover:text-destructive transition-colors">
                             Cancel Subscription
                         </button>
                     </div>
@@ -186,7 +194,7 @@ export default function BillingPage() {
                             <div className="relative z-10 space-y-5">
                                 <p className="text-xl font-medium tracking-[0.25em] font-mono leading-none">
                                     •••• •••• ••••{" "}
-                                    {subscription.customerId.slice(-4)}
+                                    {subscription.polarCustomerId?.slice(-4) || "••••"}
                                 </p>
                                 <div className="flex justify-between items-end">
                                     <div>
@@ -194,20 +202,16 @@ export default function BillingPage() {
                                             NEXT BILLING
                                         </p>
                                         <p className="text-xs font-medium tracking-widest">
-                                            {formatDate(
+                                            {subscription.currentPeriodEnd ? formatDate(
                                                 new Date(
                                                     subscription.currentPeriodEnd,
                                                 ),
                                                 "dd/MM/yy",
-                                            )}
+                                            ) : "N/A"}
                                         </p>
                                     </div>
                                     <p className="text-[10px] font-medium tracking-[0.1em] uppercase opacity-60">
-                                        ${subscription.amount / 100}/
-                                        {subscription.recurringInterval ===
-                                            "yearly"
-                                            ? "yr"
-                                            : "mo"}
+                                        {currentPlan.price}{currentPlan.period}
                                     </p>
                                 </div>
                             </div>

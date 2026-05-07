@@ -1,479 +1,405 @@
-# Notall
+# Refleum API
 
-A multi-tenant SaaS notes application built with Next.js, demonstrating enterprise-grade multi-tenancy, authentication, and subscription management patterns.
+> AI-powered resume tailoring — API-first.
 
-## Overview
-
-Notall is a production-ready multi-tenant application where multiple organizations (tenants) can securely manage their users and notes with complete data isolation. Built as a Next.js SaaS boilerplate with role-based access control and subscription feature gating.
+Refleum exposes a REST API that lets you upload resumes, tailor them to job descriptions, enrich bullet points, and generate cover letters. All operations are authenticated with an API key.
 
 ---
 
-## 🚀 Features
+Every request to `/api/v1/*` (except `/api/v1/health`) must carry your API key in one of these headers:
 
-### Core Functionality
-
-- **Multi-Tenancy** - Strict tenant isolation using shared schema with `organizationId` filtering
-- **Notes Management** - Full CRUD operations with tenant-aware access control
-- **Team Collaboration** - User invitations, role management, and permissions
-- **JWT Authentication** - Secure token-based authentication with role-based authorization
-
-### SaaS Features
-
-- **Subscription Tiers**
-    - **Free Plan**: 3 users, 50 notes limit
-    - **Pro Plan**: Unlimited users and notes
-- **Third-party Integrations** - OAuth2-based connections to Slack, GitHub, Discord, Notion, Stripe, and Figma
-- **Admin Controls** - Invite users and upgrade subscriptions
-- **Usage Tracking** - Monitor notes and user limits per organization
-- **API Access** - RESTful API with tenant isolation
-
-### Advanced Enterprise Features (Upcoming)
-
-- **Soft Deletes & Trash** - Move notes to Trash for 30 days before permanent auto-purge
-- **Activity Logs / Audit Trails** - Detailed history of who edited what and when for every note
-- **Version History** - Full version snapshots with the ability to revert to any point in time
-
----
-
-## 🏗️ Tech Stack
-
-- **Framework**: Next.js 14+ with App Router
-- **Language**: TypeScript
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: BetterAuth (JWT-based with OAuth support)
-- **Payments**: Polar.sh for subscription management
-- **Email**: Resend
-- **UI**: React + shadcn/ui + Tailwind CSS
-- **State Management**: Zustand
-- **Forms**: React Hook Form + Zod validation
-- **Deployment**: Vercel
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL database
-- npm or yarn
-
-### Installation
-
-1. Clone the repository:
-
-```bash
-git clone <repository-url>
-cd notall
+```http
+x-api-key: raik_...
+# or
+Authorization: Bearer raik_...
 ```
 
-2. Install dependencies:
+API keys are scoped to your **Organization**. Any resource (resume, job, etc.) created with an API key belongs to the organization associated with that key.
 
-```bash
-npm install
-```
+Manage your keys in the dashboard under **Settings > Developers**.
 
-3. Set up environment variables:
+**Error codes**
 
-```bash
-cp .env.example .env
-```
+| Code | HTTP | Meaning |
+|---|---|---|
+| `MISSING_KEY` | 401 | No key header present |
+| `INVALID_KEY` | 401 | Key not found or revoked |
+| `NOT_FOUND` | 404 | Resource does not belong to your account |
+| `VALIDATION_ERROR` | 400/422 | Body failed Zod validation — `detail` lists the fields |
+| `NO_PROCESSED_DATA` | 400 | Resume uploaded but not yet parsed; use `/retry-processing` |
+| `NOT_TAILORED_RESUME` | 400 | Endpoint only applies to tailored (child) resumes |
+| `PREVIEW_REQUIRED` | 400 | Call `/improve/preview` before `/improve/confirm` |
+| `HASH_MISMATCH` | 400 | `improved_data` was modified after preview; re-run preview |
+| `PERSONAL_INFO_CHANGED` | 400 | `personalInfo` must be identical to the original resume |
+| `APPLY_CONFLICT` | 409 | Resume changed between /regenerate and /apply-regenerated |
+| `TIMEOUT` | 504 | AI pipeline exceeded 240 s |
+| `INTERNAL_ERROR` | 500 | Unexpected server error |
 
-Configure your `.env` file:
+All responses follow one of two shapes:
 
-```env
-BETTER_AUTH_SECRET=your_secret_key_here
-BETTER_AUTH_URL=http://localhost:3000
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-DATABASE_URL="postgresql://user:password@localhost:5432/mydb?schema=public"
-
-# Polar.sh Configuration
-POLAR_ACCESS_TOKEN=your_polar_access_token_here
-POLAR_WEBHOOK_SECRET=your_polar_webhook_secret_here
-NEXT_PUBLIC_FREE_PLAN_ID=your_free_plan_id_here
-NEXT_PUBLIC_PRO_PLAN_ID=your_pro_plan_id_here
-
-# Email
-RESEND_API_KEY=your_resend_api_key_here
-
-# OAuth (Optional)
-GOOGLE_CLIENT_ID=your_google_client_id_here
-GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-```
-
-### Third-party Integrations Setup
-
-To enable OAuth integrations, configure the following environment variables:
-
-```bash
-# Slack OAuth
-SLACK_CLIENT_ID=your_slack_client_id
-SLACK_CLIENT_SECRET=your_slack_client_secret
-
-# GitHub OAuth
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-
-# Discord OAuth
-DISCORD_CLIENT_ID=your_discord_client_id
-DISCORD_CLIENT_SECRET=your_discord_client_secret
-
-# Notion OAuth
-NOTION_CLIENT_ID=your_notion_client_id
-NOTION_CLIENT_SECRET=your_notion_client_secret
-
-# Stripe OAuth
-STRIPE_CLIENT_ID=your_stripe_client_id
-STRIPE_CLIENT_SECRET=your_stripe_client_secret
-
-# Figma OAuth
-FIGMA_CLIENT_ID=your_figma_client_id
-FIGMA_CLIENT_SECRET=your_figma_client_secret
-```
-
-Each integration requires:
-
-1. Creating an OAuth app in the respective platform
-2. Setting the redirect URI to: `https://yourdomain.com/api/integrations/oauth/callback`
-3. Adding the client ID and secret to your environment variables
-
-4. Generate Prisma client and push schema:
-
-```bash
-npx prisma generate
-npx prisma db push
-```
-
-5. Start the development server:
-
-```bash
-npm run dev
-```
-
-Visit `http://localhost:3000` to access the application.
-
----
-
-## 📂 Project Structure
-
-```
-notall/
-├── prisma/
-│   └── schema.prisma         # Database schema
-├── public/                   # Static assets
-├── src/
-│   ├── app/
-│   │   ├── api/              # API routes (thin wrappers)
-│   │   │   ├── accept-invitation/
-│   │   │   ├── integrations/ # Integration management
-│   │   │   │   ├── oauth/    # OAuth flow endpoints
-│   │   │   │   └── [provider]/ # Provider-specific endpoints
-│   │   │   ├── notes/        # Notes CRUD endpoints
-│   │   │   ├── organizations/
-│   │   │   └── users/
-│   │   ├── dashboard/        # Protected dashboard routes
-│   │   │   ├── settings/
-│   │   │   └── users/
-│   │   ├── login/            # Login page
-│   │   ├── signup/           # Signup page
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/
-│   │   ├── emails/           # Email templates
-│   │   ├── forms/            # Form components
-│   │   ├── settings/         # Settings components
-│   │   ├── theme/            # Theme components
-│   │   ├── ui/               # shadcn/ui components
-│   │   ├── app-sidebar.tsx
-│   │   ├── nav-main.tsx
-│   │   ├── nav-projects.tsx
-│   │   ├── nav-user.tsx
-│   │   └── team-switcher.tsx
-│   ├── hooks/                # Custom React hooks
-│   ├── lib/                  # Utility functions
-│   │   ├── auth.ts           # BetterAuth configuration
-│   │   └── utils.ts          # Helper functions
-│   ├── server/               # Business logic (single source of truth)
-│   │   ├── integrations.ts   # Integration operations
-│   │   ├── invitations.ts
-│   │   ├── members.ts
-│   │   ├── organizations.ts
-│   │   ├── permissions.ts
-│   │   ├── polar.ts
-│   │   ├── security.ts
-│   │   ├── subscription.ts
-│   │   ├── users.ts
-│   │   └── versions.ts
-│   ├── types/                # TypeScript types
-│   └── zustand/              # State management
-│       └── providers/
-├── .env.example              # Environment variables template
-├── components.json           # shadcn/ui config
-├── eslint.config.mjs
-├── middleware.ts             # Next.js middleware
-├── next.config.ts
-├── next-env.d.ts
-├── package.json
-└── tsconfig.json
+```jsonc
+{ "data": { ... } }           // success
+{ "error": "CODE", "detail": "..." }  // failure
 ```
 
 ---
 
-## 🔍 Key Implementation Details
+## Quickstart
 
-### 1. Multi-Tenancy Architecture
+```bash
+KEY="raik_your_key_here"
 
-**Approach**: Shared database, shared schema with tenant isolation via `organizationId`
+# 1. Upload your resume
+RESUME=$(curl -s -X POST https://api.refleum.com/api/v1/resumes \
+  -H "x-api-key: $KEY" \
+  -F "file=@resume.pdf" | jq -r '.data.resume_id')
 
-All database queries are scoped to the authenticated user's organization:
+# 2. Upload a job description
+JOB=$(curl -s -X POST https://api.refleum.com/api/v1/jobs \
+  -H "x-api-key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"job_descriptions\":[\"$(cat job.txt | tr -d '\n')\"]}" \
+  | jq -r '.data.job_ids[0]')
 
-```typescript
-// Example: Tenant-isolated query
-const notes = await prisma.note.findMany({
-	where: {
-		organizationId: activeOrganization.id,
-		userId: user.id,
-	},
-});
+# 3. Preview tailored resume
+curl -s -X POST https://api.refleum.com/api/v1/resumes/improve/preview \
+  -H "x-api-key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"resume_id\":\"$RESUME\",\"job_id\":\"$JOB\",\"prompt_id\":\"keywords\"}" \
+  | jq '.data.diff_summary'
+
+# 4. Confirm and save
+curl -s -X POST https://api.refleum.com/api/v1/resumes/improve/confirm \
+  -H "x-api-key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"resume_id\":\"$RESUME\",\"job_id\":\"$JOB\",\"improved_data\":<paste preview.resume_preview>,\"improvements\":[]}"
 ```
 
-**Schema Example:**
+---
 
-```prisma
-model Note {
-  id             String       @id @default(cuid())
-  organizationId String
-  userId         String
-  title          String
-  content        String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+## API Reference
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  user           User         @relation(fields: [userId], references: [id])
+### Resumes
+
+#### `POST /api/v1/resumes`
+Upload a PDF or DOCX resume. Parses it to structured JSON via LLM.
+
+**Request:** `multipart/form-data`
+| Field | Type | Required |
+|---|---|---|
+| `file` | File | ✓ PDF, DOC, DOCX — max 4 MB |
+
+**Response `201`**
+```jsonc
+{ "data": { "resume_id": "clx...", "processing_status": "ready", "is_master": true, "message": "..." } }
+```
+If LLM parsing fails the status is `"failed"` and HTTP is `202`. Use `/retry-processing` to retry.
+
+---
+
+#### `GET /api/v1/resumes`
+List resumes owned by the caller.
+
+**Query params**
+| Param | Default | Description |
+|---|---|---|
+| `include_master` | `false` | Include the master resume in results |
+
+**Response `200`** `{ data: { resumes: ResumeSummary[] } }`
+
+---
+
+#### `GET /api/v1/resumes/:id`
+Fetch a single resume, including processed JSON and generated content.
+
+**Response `200`** `{ data: ResumeFetchData }`
+
+---
+
+#### `PATCH /api/v1/resumes/:id`
+Replace a resume's structured data.
+**Body:** `ResumeData` (JSON)
+
+---
+
+#### `DELETE /api/v1/resumes/:id`
+Permanently delete a resume.
+
+---
+
+#### `POST /api/v1/resumes/:id/retry-processing`
+Re-run LLM parsing on a `failed` or `processing` resume.
+
+---
+
+#### `PATCH /api/v1/resumes/:id/cover-letter`
+**Body:** `{ "content": "..." }`
+
+#### `PATCH /api/v1/resumes/:id/outreach-message`
+**Body:** `{ "content": "..." }`
+
+#### `PATCH /api/v1/resumes/:id/title`
+**Body:** `{ "title": "..." }` (max 80 chars)
+
+---
+
+#### `POST /api/v1/resumes/:id/generate-cover-letter`
+On-demand cover letter generation for an existing tailored resume.
+Requires the resume to have a linked job description (i.e. created via `/improve/confirm`).
+
+**Response `200`** `{ data: { content: "..." } }`
+
+#### `POST /api/v1/resumes/:id/generate-outreach`
+Same as above but for LinkedIn/email outreach message.
+
+---
+
+#### `GET /api/v1/resumes/:id/job-description`
+Get the job description used to tailor a resume.
+
+**Response `200`** `{ data: { job_id, content } }`
+
+---
+
+### Improve
+
+#### `POST /api/v1/resumes/improve/preview`
+Run the full AI tailoring pipeline. Returns a preview — **nothing is saved**.
+
+**Body**
+```jsonc
+{
+  "resume_id": "clx...",
+  "job_id":    "clx...",
+  "prompt_id": "keywords"   // "nudge" | "keywords" | "full"  (default: "keywords")
 }
 ```
 
-### 2. Authentication Flow
+**Response `200`** `{ data: ImproveResumeData }` — `resume_id` is `null`.
 
-1. User logs in via `/api/auth/login`
-2. JWT token generated and returned
-3. Token validated by middleware on protected routes
-4. User's organization context loaded for all requests
-
-### 3. Subscription Feature Gating
-
-**Free Plan Limits:**
-
-- 3 users per organization
-- 50 notes per organization
-
-**Pro Plan:**
-
-- Unlimited users and notes
-- Only accessible to **Admin** users for subscription management
-
-### 4. Notes API Endpoints
-
-All endpoints enforce tenant isolation:
-
-- `POST /api/notes` - Create note
-- `GET /api/notes` - List all notes (tenant-scoped)
-- `GET /api/notes/:id` - Get single note
-- `PUT /api/notes/:id` - Update note
-- `DELETE /api/notes/:id` - Delete note
+The pipeline runs in this order:
+1. Extract job keywords (cached per job)
+2. Generate targeted diffs via LLM
+3. Apply diffs with 4-gate verification
+4. Safety nets: preserve personalInfo, restore dates, restore dropped skills, protect custom sections
+5. Multi-pass refinement: keyword injection → AI phrase removal → alignment validation
+6. Store preview hash in job record
 
 ---
 
-## 🎯 Development Guidelines
+#### `POST /api/v1/resumes/improve/confirm`
+Validate the preview hash and persist the tailored resume.
 
-### Code Organization Pattern
-
-1. **Business Logic**: Write all operations in `src/server/` functions
-2. **API Routes**: Keep routes thin - just call server functions
-3. **State Updates**: Update Zustand stores after successful mutations
-4. **Type Safety**: Define interfaces in `src/types/`
-
-### Example Workflow
-
-```typescript
-// 1. Define server function (src/server/notes.ts)
-export async function createNote(data: CreateNoteInput) {
-	// Business logic here
+**Body**
+```jsonc
+{
+  "resume_id":     "clx...",
+  "job_id":        "clx...",
+  "improved_data": { /* resume_preview from /preview */ },
+  "improvements":  [ /* improvements array from /preview */ ]
 }
+```
 
-// 2. Call from API route (src/app/api/notes/route.ts)
-export async function POST(request: Request) {
-	const result = await createNote(data);
-	return NextResponse.json(result);
+**Response `201`** `{ data: { resume_id, cover_letter?, outreach_message?, title?, diff_summary, warnings[] } }`
+
+Rejects with `HASH_MISMATCH` if `improved_data` was modified after preview. Re-run `/preview` to get a fresh hash.
+
+---
+
+### Jobs
+
+#### `POST /api/v1/jobs`
+Upload one or more job descriptions.
+
+**Body**
+```jsonc
+{
+  "job_descriptions": ["Full JD text..."],
+  "resume_id": "clx..."   // optional — associates JD with a specific resume
 }
-
-// 3. Update state in component
-const addNote = async (data) => {
-	const note = await fetch("/api/notes", {
-		method: "POST",
-		body: JSON.stringify(data),
-	});
-	notesStore.addNote(note); // Update Zustand
-};
 ```
 
-### Development Commands
-
-```bash
-# Development
-npm run dev              # Start dev server
-npm run lint             # Run ESLint
-npm run build            # Production build
-
-# Database
-npx prisma generate      # Generate Prisma client
-npx prisma db push       # Push schema changes
-npx prisma studio        # Open database GUI
-```
+**Response `201`** `{ data: { job_ids: ["clx..."] } }`
 
 ---
 
-## 🌐 API Reference
+#### `GET /api/v1/jobs/:id`
+Fetch a job record including cached keywords.
 
-### Health Check
+---
 
-```http
-GET /api/health
-Response: { "status": "ok" }
-```
+### Enrichment
 
-### Authentication
+#### `POST /api/v1/enrichment/analyze/:resumeId`
+AI identifies weak/vague bullet points and generates up to **6 clarifying questions** (hard limit).
 
-```http
-POST /api/auth/login
-Body: { "email": "admin@acme.test", "password": "password" }
-Response: { "token": "jwt-token", "user": {...} }
-```
-
-### Notes Operations
-
-```http
-# Create Note
-POST /api/notes
-Headers: { "Authorization": "Bearer <token>" }
-Body: { "title": "My Note", "content": "Note content" }
-
-# List Notes
-GET /api/notes
-Headers: { "Authorization": "Bearer <token>" }
-
-# Update Note
-PUT /api/notes/:id
-Headers: { "Authorization": "Bearer <token>" }
-Body: { "title": "Updated Title", "content": "Updated content" }
-
-# Delete Note
-DELETE /api/notes/:id
-Headers: { "Authorization": "Bearer <token>" }
+**Response `200`**
+```jsonc
+{
+  "data": {
+    "items_to_enrich": [ { "item_id": "exp_0", "item_type": "experience", "weakness_reason": "..." } ],
+    "questions": [ { "question_id": "q_0", "item_id": "exp_0", "question": "...", "placeholder": "..." } ],
+    "analysis_summary": "..."
+  }
+}
 ```
 
 ---
 
-## 🚢 Deployment
+#### `POST /api/v1/enrichment/enhance`
+Generate new bullet points from user answers. **Bullets are appended — existing description is never replaced.**
 
-### Vercel Deployment (Recommended)
-
-1. Push your code to GitHub
-2. Import project in Vercel
-3. Configure environment variables
-4. Deploy
-
-### Environment Variables for Production
-
-```env
-BETTER_AUTH_SECRET=your_production_secret_here
-BETTER_AUTH_URL=https://yourdomain.com
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
-DATABASE_URL="postgresql://..."
-
-POLAR_ACCESS_TOKEN=your_polar_access_token
-POLAR_WEBHOOK_SECRET=your_polar_webhook_secret
-NEXT_PUBLIC_FREE_PLAN_ID=your_free_plan_id
-NEXT_PUBLIC_PRO_PLAN_ID=your_pro_plan_id
-
-RESEND_API_KEY=your_resend_api_key
-
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
+**Body**
+```jsonc
+{
+  "resume_id": "clx...",
+  "answers": [
+    { "question_id": "q_0", "item_id": "exp_0", "answer": "...", "question_text": "..." }
+  ]
+}
 ```
 
-### Database Setup
+**Response `200`** `{ data: { enhancements: EnhancedDescription[] } }`
 
-Ensure your production database is set up:
+---
 
-```bash
-npx prisma db push
+#### `POST /api/v1/enrichment/apply/:resumeId`
+Append the enhanced bullets to the stored resume.
+
+**Body** `{ "enhancements": EnhancedDescription[] }`
+
+---
+
+#### `POST /api/v1/enrichment/regenerate`
+Rewrite selected sections based on a freeform instruction. Processes all items in parallel.
+
+**Body**
+```jsonc
+{
+  "resume_id":       "clx...",
+  "items": [ { "item_id": "exp_0", "item_type": "experience", "title": "...", "current_content": ["..."] } ],
+  "instruction":     "Make bullets more quantified and action-oriented",
+  "output_language": "en"
+}
 ```
 
----
-
-## 🧪 Testing
-
-The application includes comprehensive validation coverage:
-
-**Automated Test Coverage:**
-
-- ✅ Health endpoint availability
-- ✅ Authentication flow
-- ✅ Tenant isolation enforcement
-- ✅ Role-based access restrictions
-- ✅ Subscription limits and upgrades
-- ✅ CRUD operations
-- ✅ Frontend accessibility
+**Response `200`** `{ data: { regenerated_items: RegeneratedItem[], errors: RegenerateItemError[] } }`
+Non-fatal per-item errors are returned alongside successful items.
 
 ---
 
-## 📋 Features Checklist
+#### `POST /api/v1/enrichment/apply-regenerated/:resumeId`
+Apply regenerated content to the stored resume.
 
-- [x] Multi-tenant architecture with data isolation
-- [x] JWT-based authentication
-- [x] Role-based authorization (Admin/Member)
-- [x] Free and Pro subscription tiers
-- [x] Notes CRUD with tenant scoping
-- [x] User invitation system
-- [x] Subscription upgrade endpoint
-- [x] Usage limits enforcement
-- [x] Responsive frontend UI
-- [x] API health monitoring
-- [x] Production deployment on Vercel
+**All-or-nothing:** every item must match the current DB content exactly (verified by comparing `original_content` to the stored description, case-insensitive). If any item fails, the entire request is rejected with `409 APPLY_CONFLICT` — no partial writes.
+
+**Body** `RegeneratedItem[]`
 
 ---
 
-## 🤝 Contributing
+### Settings
 
-Contributions are welcome! Please follow these guidelines:
+#### `GET /api/v1/settings/llm`
+Returns the caller's LLM config. API key is masked (last 4 chars only).
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Follow the code organization patterns in `src/server/` for business logic
-4. Ensure all database queries include `organizationId` filtering
-5. Update Zustand stores after mutations
-6. Commit your changes (`git commit -m 'Add amazing feature'`)
-7. Push to the branch (`git push origin feature/amazing-feature`)
-8. Open a Pull Request
+#### `PUT /api/v1/settings/llm`
+Update LLM provider, model, API key, and feature flags. Omit any field to leave it unchanged.
 
----
+**Body** (all optional)
+```jsonc
+{
+  "provider":             "openai",
+  "model":                "gpt-4o",
+  "apiKey":               "sk-...",
+  "apiBase":              null,
+  "reasoningEffort":      "minimal",
+  "enableCoverLetter":    true,
+  "enableOutreachMessage": false,
+  "contentLanguage":      "en",
+  "defaultPromptId":      "keywords"
+}
+```
 
-## 📄 License
-
-MIT License - see LICENSE file for details
-
----
-
-## 📞 Support
-
-For issues and questions:
-
-- Open an issue on GitHub
-- Check the implementation details above
-- Review the code examples in `src/server/`
+Supported providers: `openai` `anthropic` `gemini` `openrouter` `deepseek` `ollama` `openai_compatible`
+Supported prompt IDs: `nudge` `keywords` `full`
+Supported languages: `en` `es` `zh` `ja` `pt`
 
 ---
 
-**Built with Next.js as a SaaS boilerplate demonstrating multi-tenant architecture patterns**
+### API Key Management
+
+Key management endpoints use **session auth** (browser cookie), not an API key.
+Integrate these into your dashboard settings page.
+
+#### `GET /api/v1/keys`
+List API keys (metadata only — key values are never retrievable after creation).
+
+#### `POST /api/v1/keys`
+Create a new API key. The `key` field in the response is returned **once only**.
+
+**Body** `{ "name": "Production" }`
+
+**Response `201`**
+```jsonc
+{ "data": { "id": "...", "name": "Production", "key": "raik_..." } }
+```
+
+#### `DELETE /api/v1/keys/:id`
+Revoke an API key. Ownership is verified — you cannot revoke another user's key.
+
+---
+
+### Health
+
+#### `GET /api/v1/health`
+Public — no auth required.
+
+**Response `200`** `{ "data": { "status": "ok", "db": "ok" } }`
+**Response `503`** `{ "error": "INTERNAL_ERROR", "detail": "Database unreachable" }`
+
+---
+
+## Prompt Strategies
+
+| `prompt_id` | Behaviour |
+|---|---|
+| `nudge` | Minimal edits — rephrase only where there is a clear match. No new bullets. |
+| `keywords` | Weave in JD keywords where evidence already exists. May rephrase bullets. **(default)** |
+| `full` | Comprehensive tailoring — may add bullets elaborating existing work. |
+
+---
+
+## Supported LLM Providers
+
+| Provider | Notes |
+|---|---|
+| `openai` | GPT-4o, o1, o3, GPT-4 Turbo |
+| `anthropic` | Claude 3.5 Sonnet, Claude 3 Opus |
+| `gemini` | Gemini 1.5 Pro, Gemini 2.0 Flash |
+| `openrouter` | Any model via openrouter.ai |
+| `deepseek` | DeepSeek Chat, DeepSeek R1 |
+| `ollama` | Local models — set `apiBase` to `http://localhost:11434` |
+| `openai_compatible` | llama.cpp, vLLM, LM Studio — set `apiBase` to your endpoint |
+
+---
+
+## Rate Limits
+
+Rate limits are enforced based on your organization's subscription plan:
+
+| Plan | Rate Limit (Requests/60s) |
+|---|---|
+| FREE | 10 |
+| STARTER | 30 |
+| PRO | 100 |
+| ENTERPRISE | 500 |
+
+## Usage & Billing
+
+Refleum uses metered billing via Polar.sh for certain AI operations. Usage is recorded in your organization's history:
+
+- **Resume Tailoring**: 1 usage record per successful tailoring.
+- **PDF Export**: 1 usage record per download.
+- **Cover Letter Generation**: 1 usage record per generation (PRO+).
+
+Track your usage at `/api/v1/usage`.

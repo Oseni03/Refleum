@@ -13,24 +13,214 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String       @id @default(cuid())
-  name          String
-  email         String
-  emailVerified Boolean      @default(false)
-  image         String?
-  title         String?
-  bio           String?
-  theme         String       @default("system")
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @default(now()) @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  members       Member[]
-  invitations   Invitation[]
+// schema.prisma — app-owned models only
+// Better Auth owns: User, Session, Account, ApiKey (via npx auth migrate)
+// Better Auth owns: Organization, Member, Invitation (via organization plugin)
 
-  twoFactorEnabled Boolean?    @default(false)
+model Subscription {
+  id                  String    @id @default(cuid())
+  organizationId      String    @unique
+  polarCustomerId     String?
+  polarSubscriptionId String?
+  plan                Plan      @default(FREE)
+  status              String    @default("active") // active, past_due, canceled
+  currentPeriodEnd    DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("subscription")
+}
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  operation      String // "tailor" | "parse" | "pdf_export"
+  resumeId       String?
+  polarRecordId  String? // Polar usage record ID for metered billing
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
+  @@map("usage_records")
+}
+
+model Resume {
+  id               String          @id @default(cuid())
+  organizationId   String // Tenant isolation
+  userId           String?
+  isMaster         Boolean         @default(false)
+  parentId         String? // FK → Resume (source)
+  status           ResumeStatus    @default(PENDING)
+  filename         String
+  originalMarkdown String          @db.Text // Immutable after creation
+  structuredData   Json // ResumeData
+  jobDescription   String?         @db.Text // Only on tailored resumes
+  jobKeywords      Json? // Extracted from JD
+  strategy         TailorStrategy?
+  title            String? // "Role @ Company"
+  outputLanguage   String          @default("en")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  coverletters CoverLetter[]
+  outreaches   Outreach[]
+  children     Resume[]      @relation("ResumeToResume")
+  parent       Resume?       @relation("ResumeToResume", fields: [parentId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationId, isMaster])
+  @@index([organizationId, status])
+  @@map("resumes")
+}
+
+model CoverLetter {
+  id             String   @id @default(cuid())
+  organizationId String // Tenant isolation (denormalized for query efficiency)
+  resumeId       String
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  resume       Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([resumeId])
+  @@map("cover_letters")
+}
+
+model Outreach {
+  id             String   @id @default(cuid())
+  organizationId String // Tenant isolation (denormalized)
+  resumeId       String
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  resume       Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([resumeId])
+  @@map("outreach")
+}
+
+// Extra app models not explicitly removed in PRD but which lost relations
+
+model Integration {
+  id             String    @id @default(cuid())
+  organizationId String
+  provider       String // e.g., 'slack', 'github', 'discord'
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+  scope          String?
+  metadata       String? // JSON string for additional data
+  connectedAt    DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, provider])
+  @@map("integration")
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  organizationId String
+  title          String
+  message        String
+  type           NotificationType @default(INFO)
+  read           Boolean          @default(false)
+  link           String? // e.g. "/dashboard/billing" or external link
+  metadata       Json? // For extra data if needed
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, read])
+  @@index([createdAt])
+  @@map("notification")
+}
+
+model LlmConfig {
+  id                    String   @id @default(cuid())
+  userId                String?  @unique
+  organizationId        String   @unique
+  provider              String   @default("openai")
+  model                 String   @default("gpt-4o")
+  apiKey                String? // Encrypted at application layer
+  apiBase               String?
+  reasoningEffort       String? // "minimal" | "low" | "medium" | "high"
+  enableCoverLetter     Boolean  @default(false)
+  enableOutreachMessage Boolean  @default(false)
+  contentLanguage       String   @default("en")
+  defaultPromptId       String   @default("keywords")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user         User?        @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("llm_configs")
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum ResumeStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum TailorStrategy {
+  NUDGE
+  KEYWORDS
+  FULL
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+model User {
+  id               String       @id
+  name             String
+  email            String
+  emailVerified    Boolean      @default(false)
+  image            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  twoFactorEnabled Boolean?     @default(false)
+  title            String?
+  bio              String?
+  theme            String?      @default("system")
+  sessions         Session[]
+  accounts         Account[]
+  members          Member[]
+  invitations      Invitation[]
   twofactors       TwoFactor[]
+  apikeys          Apikey[]
+  resumes          Resume[]
+  config           LlmConfig?
 
   @@unique([email])
   @@map("user")
@@ -79,25 +269,29 @@ model Verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  updatedAt  DateTime @updatedAt
 
   @@index([identifier])
   @@map("verification")
 }
 
 model Organization {
-  id              String         @id @default(cuid())
-  name            String
-  slug            String?
-  logo            String?
-  createdAt       DateTime
-  metadata        String?
-  polarCustomerId String?
-  subscription    Subscription?
-  members         Member[]
-  invitations     Invitation[]
-  integrations    Integration[]
-  Notification    Notification[]
+  id            String         @id  @default(cuid())
+  name          String
+  slug          String
+  logo          String?
+  createdAt     DateTime
+  metadata      String?
+  members       Member[]
+  invitations   Invitation[]
+  resumes       Resume[]
+  coverletters  CoverLetter[]
+  outreaches    Outreach[]
+  notifications Notification[]
+  config        LlmConfig?
+  subscription  Subscription?
+  usage_records UsageRecord[]
+  integrations  Integration[]
 
   @@unique([slug])
   @@map("organization")
@@ -109,56 +303,24 @@ model Member {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           String
-  createdAt      DateTime     @default(now())
+  role           String       @default("member")
+  createdAt      DateTime
 
   @@map("member")
 }
 
 model Invitation {
-  id             String       @id @default(cuid())
+  id             String       @id
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String
   role           String?
-  status         String
+  status         String       @default("pending")
   expiresAt      DateTime
   inviterId      String
   user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
   @@map("invitation")
-}
-
-model Subscription {
-  id                          String    @id @default(cuid())
-  createdAt                   DateTime  @default(now())
-  modifiedAt                  DateTime?
-  amount                      Int
-  currency                    String
-  recurringInterval           String
-  status                      String
-  currentPeriodStart          DateTime
-  currentPeriodEnd            DateTime
-  cancelAtPeriodEnd           Boolean   @default(false)
-  canceledAt                  DateTime?
-  startedAt                   DateTime
-  endsAt                      DateTime?
-  endedAt                     DateTime?
-  customerId                  String
-  subscriptionId              String?
-  productId                   String
-  discountId                  String?
-  checkoutId                  String
-  customerCancellationReason  String?
-  customerCancellationComment String?
-  metadata                    String? // JSON string
-  customFieldData             String? // JSON string
-  organizationId              String    @unique
-
-  // Relation to Organization model
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@map("subscription")
 }
 
 model TwoFactor {
@@ -171,45 +333,29 @@ model TwoFactor {
   @@map("twoFactor")
 }
 
-model Integration {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  provider       String // e.g., 'slack', 'github', 'discord'
-  accessToken    String?
-  refreshToken   String?
-  expiresAt      DateTime?
-  scope          String?
-  metadata       String? // JSON string for additional data
-  connectedAt    DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+model Apikey {
+  id                  String    @id
+  name                String?
+  start               String?
+  prefix              String?
+  key                 String
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refillInterval      Int?
+  refillAmount        Int?
+  lastRefillAt        DateTime?
+  enabled             Boolean?  @default(true)
+  rateLimitEnabled    Boolean?  @default(true)
+  rateLimitTimeWindow Int?      @default(60)
+  rateLimitMax        Int?      @default(100)
+  requestCount        Int?      @default(0)
+  remaining           Int?
+  lastRequest         DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime
+  updatedAt           DateTime
+  permissions         String?
+  metadata            String?
 
-  @@unique([organizationId, provider])
-  @@map("integration")
-}
-
-model Notification {
-  id             String           @id @default(cuid())
-  organizationId String
-  title          String
-  message        String
-  type           NotificationType @default(INFO)
-  read           Boolean          @default(false)
-  link           String? // e.g. "/dashboard/billing" or external link
-  metadata       Json? // For extra data if needed
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId, read])
-  @@index([createdAt])
-}
-
-enum NotificationType {
-  INFO
-  SUCCESS
-  WARNING
-  ERROR
+  @@map("apikey")
 }

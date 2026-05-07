@@ -7,6 +7,7 @@ import {
     Users2,
     CreditCard,
     ExternalLink,
+    Key,
 } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -29,6 +30,12 @@ const dashboardItems = [
         url: "/dashboard",
     },
     {
+        id: "api-keys",
+        label: "API Keys",
+        icon: Key,
+        url: "/dashboard/api-keys",
+    },
+    {
         id: "members",
         label: "Members",
         icon: Users2,
@@ -40,12 +47,12 @@ const dashboardItems = [
         icon: CreditCard,
         url: "/dashboard/billing",
     },
-    {
-        id: "integrations",
-        label: "Integrations",
-        icon: ExternalLink,
-        url: "/dashboard/integrations",
-    },
+    // {
+    //     id: "integrations",
+    //     label: "Integrations",
+    //     icon: ExternalLink,
+    //     url: "/dashboard/integrations",
+    // },
     {
         id: "settings",
         label: "Settings",

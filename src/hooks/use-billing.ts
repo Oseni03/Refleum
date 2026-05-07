@@ -1,5 +1,6 @@
 import { SUBSCRIPTION_PLANS } from "@/lib/utils";
 import { useOrganizationStore } from "@/zustand/providers/organization-store-provider";
+import { Plan } from "@prisma/client";
 import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -48,15 +49,7 @@ export function useBilling() {
         }
     }, [activeOrganization, isAdmin, subscription, openPortal, subscribe, productIds]);
 
-    const getPlanFromProductId = useCallback((productId: string) => {
-        return SUBSCRIPTION_PLANS.find((plan) => plan.productId === productId);
-    }, []);
-
-    const currentPlan = subscription?.productId
-        ? getPlanFromProductId(subscription.productId)
-        : SUBSCRIPTION_PLANS.find((p) => p.id === "free");
-
-    const planName = currentPlan?.name || "Free";
+    const plan = subscription?.plan || Plan.FREE;
 
     return {
         members,
@@ -64,8 +57,7 @@ export function useBilling() {
         subscription,
         isLoading,
         error,
+        plan,
         handleSubscriptionAction,
-        currentPlan,
-        planName,
     };
 }
