@@ -1,107 +1,101 @@
 import React from "react";
-import Header from "@/components/homepage/header";
-import Footer from "@/components/homepage/footer";
 import { siteConfig } from "@/config/site";
 import { Twitter, Linkedin, Mail, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
 
-export const metadata = {
-	title: `Contact Us - ${siteConfig.name}`,
-	description: `Get in touch with the ${siteConfig.name} team.`,
+export const metadata: Metadata = {
+    title: `Contact — ${siteConfig.name}`,
+    description: `Get in touch with the ${siteConfig.name} team.`,
 };
 
-export default function ContactPage() {
-	return (
-		<div className="flex flex-col min-h-screen">
-			<Header />
-			<main className="flex-1">
-				<section className="py-24 px-4 bg-background">
-					<div className="max-w-4xl mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-700">
-						<div className="space-y-4 text-center">
-							<h1 className="text-4xl md:text-6xl font-bold tracking-tight text-foreground">
-								Get in Touch
-							</h1>
-							<p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-								Have questions? We&apos;d love to hear from you.
-							</p>
-						</div>
+export default function ContactPage(): React.ReactElement {
+    return (
+        <main className="max-w-4xl mx-auto px-6 py-16 space-y-16">
+            {/* Header */}
+            <div className="space-y-3">
+                <h1 className="text-4xl font-bold text-foreground">Get in touch</h1>
+                <p className="text-lg text-muted-foreground max-w-xl">
+                    Questions about the API, billing, or your organisation? We&apos;d love to hear from you.
+                </p>
+            </div>
 
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-							{/* Social Channels */}
-							<div className="space-y-8">
-								<h3 className="text-2xl font-semibold">
-									Social Channels
-								</h3>
-								<div className="space-y-4">
-									<a
-										href={siteConfig.links.x}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex items-center gap-4 p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted transition-all group"
-									>
-										<div className="size-12 rounded-xl bg-foreground text-background flex items-center justify-center group-hover:scale-110 transition-transform">
-											<Twitter className="size-6 fill-current" />
-										</div>
-										<div>
-											<p className="font-bold">
-												Follow us on X
-											</p>
-											<p className="text-sm text-muted-foreground">
-												Latest updates and news
-											</p>
-										</div>
-									</a>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                {/* Social channels */}
+                <div className="space-y-6">
+                    <h2 className="text-xl font-semibold text-foreground">Follow us</h2>
+                    <div className="space-y-4">
+                        <a
+                            href={siteConfig.links.x}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors group"
+                        >
+                            <div className="size-11 rounded-lg bg-foreground text-background flex items-center justify-center group-hover:scale-105 transition-transform">
+                                <Twitter className="size-5 fill-current" />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-foreground text-sm">X (Twitter)</p>
+                                <p className="text-xs text-muted-foreground">Announcements and updates</p>
+                            </div>
+                        </a>
 
-									<a
-										href={siteConfig.links.linkedin}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex items-center gap-4 p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted transition-all group"
-									>
-										<div className="size-12 rounded-xl bg-[#0077B5] text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-											<Linkedin className="size-6 fill-current" />
-										</div>
-										<div>
-											<p className="font-bold">
-												LinkedIn
-											</p>
-											<p className="text-sm text-muted-foreground">
-												Professional network & insights
-											</p>
-										</div>
-									</a>
-								</div>
-							</div>
+                        <a
+                            href={siteConfig.links.linkedin}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors group"
+                        >
+                            <div className="size-11 rounded-lg bg-[#0077B5] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
+                                <Linkedin className="size-5 fill-current" />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-foreground text-sm">LinkedIn</p>
+                                <p className="text-xs text-muted-foreground">Professional network and insights</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
 
-							{/* Direct Support */}
-							<div className="space-y-8">
-								<h3 className="text-2xl font-semibold">
-									Support
-								</h3>
-								<div className="p-8 rounded-3xl border border-border bg-primary/5 space-y-6">
-									<div className="space-y-2">
-										<div className="size-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
-											<Mail className="size-5" />
-										</div>
-										<h4 className="font-bold text-lg">
-											Email Support
-										</h4>
-										<p className="text-sm text-muted-foreground">
-											Reach out directly for technical
-											assistance or business inquiries.
-										</p>
-									</div>
-									<Button className="w-full h-12 rounded-xl gap-2 font-bold uppercase tracking-widest text-xs">
-										<MessageSquare className="size-4" />
-										Send a Message
-									</Button>
-								</div>
-							</div>
-						</div>
-					</div>
-				</section>
-			</main>
-			<Footer />
-		</div>
-	);
+                {/* Direct support */}
+                <div className="space-y-6">
+                    <h2 className="text-xl font-semibold text-foreground">Direct support</h2>
+                    <div className="p-6 rounded-xl border border-border bg-card space-y-5">
+                        <div className="space-y-2">
+                            <div className="size-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+                                <Mail className="size-5" />
+                            </div>
+                            <h3 className="font-semibold text-foreground">Email support</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Reach out for technical help, billing questions, or enterprise enquiries.
+                                We typically respond within one business day.
+                            </p>
+                        </div>
+                        <Button asChild className="w-full gap-2">
+                            <a href={`mailto:support@${new URL(siteConfig.url).hostname}`}>
+                                <MessageSquare className="size-4" />
+                                Send a message
+                            </a>
+                        </Button>
+                    </div>
+
+                    {/* Enterprise */}
+                    <div className="p-6 rounded-xl border border-border bg-card space-y-3">
+                        <h3 className="font-semibold text-foreground text-sm">Enterprise enquiries</h3>
+                        <p className="text-xs text-muted-foreground">
+                            Interested in a custom plan, volume pricing, or dedicated support? Contact us
+                            at{" "}
+                            <a
+                                href={`mailto:enterprise@${new URL(siteConfig.url).hostname}`}
+                                className="text-primary underline underline-offset-4"
+                            >
+                                enterprise@{new URL(siteConfig.url).hostname}
+                            </a>
+                            .
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    );
 }

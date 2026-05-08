@@ -49,6 +49,8 @@ export interface InvitationData {
     expiresAt: string;
 }
 
+export type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+
 export * from "./resume";
 export * from "./enrichment";
 export * from "./api";

@@ -24,7 +24,7 @@ export async function GET(
             },
         });
     } catch (e: any) {
-        const status = e.message === "Resume not found" ? 404 : 500;
+        const status = e.message === "Resume not found" ? 404 : 503;
         return NextResponse.json({ error: e.message || "PDF_GENERATION_FAILED" }, { status });
     }
 }

@@ -12,10 +12,10 @@ function Pricing() {
         >
             <div className="mb-16 text-center">
                 <h2 className="mb-4 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                    Simple pricing.
+                    Simple, metered pricing.
                 </h2>
                 <p className="text-lg text-muted-foreground">
-                    Plans that scale with your growth.
+                    Pay for tailor calls. PDF exports and reads are always free.
                 </p>
             </div>
 
@@ -26,8 +26,8 @@ function Pricing() {
                         <div
                             key={plan.id}
                             className={`relative flex flex-col rounded-3xl border p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${isPopular
-                                    ? "border-2 border-primary shadow-xl shadow-primary/10"
-                                    : "border-border bg-card"
+                                ? "border-2 border-primary shadow-xl shadow-primary/10"
+                                : "border-border bg-card"
                                 }`}
                         >
                             {isPopular && (
@@ -39,8 +39,8 @@ function Pricing() {
                             <div className="mb-8">
                                 <span
                                     className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${isPopular
-                                            ? "bg-primary/10 text-primary"
-                                            : "bg-muted text-foreground"
+                                        ? "bg-primary/10 text-primary"
+                                        : "bg-muted text-foreground"
                                         }`}
                                 >
                                     {plan.name}
@@ -74,18 +74,24 @@ function Pricing() {
 
                             <div className="mt-auto">
                                 {plan.id === "ENTERPRISE" ? (
-                                    <Button className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent">
-                                        Contact Sales
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        className="w-full rounded-xl px-4 py-3 text-sm font-semibold"
+                                    >
+                                        <Link href="/contact">Contact sales</Link>
                                     </Button>
                                 ) : (
                                     <Link
                                         href="/signup"
                                         className={`inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition-all ${isPopular
-                                                ? "bg-primary text-primary-foreground hover:opacity-90"
-                                                : "border border-border text-foreground hover:bg-accent"
+                                            ? "bg-primary text-primary-foreground hover:opacity-90"
+                                            : "border border-border text-foreground hover:bg-accent"
                                             }`}
                                     >
-                                        {plan.id === "FREE" ? "Get Started" : `Upgrade to ${plan.name}`}
+                                        {plan.id === "FREE"
+                                            ? "Get your API key"
+                                            : `Upgrade to ${plan.name}`}
                                     </Link>
                                 )}
                             </div>
@@ -93,6 +99,14 @@ function Pricing() {
                     );
                 })}
             </div>
+
+            {/* Billing footnote */}
+            <p className="mt-10 text-center text-xs text-muted-foreground">
+                Tailor calls are metered per request — billed even when the pipeline fails, because
+                every call triggers LLM API costs. Reads and PDF exports are always included.
+                Billed via{" "}
+                <span className="font-medium text-foreground">Polar.sh</span>.
+            </p>
         </section>
     );
 }

@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRateLimit, requirePlan } from "@/lib/middleware";
-import { getSubscriptionPlan, recordUsage } from "@/server/subscription";
-import { listOutreachMessages, generateOutreach } from "@/server/outreach";
-import { z } from "zod";
+import { requireRateLimit } from "@/lib/middleware";
+import { getSubscriptionPlan } from "@/server/subscription";
+import { listOutreachMessages } from "@/server/outreach";
 import { authenticate } from "@/lib/api";
 
-const generateSchema = z.object({
-    resumeId: z.string().min(1),
-    type: z.enum(["LinkedIn", "Email"]),
-});
-
+// GET /api/v1/outreach — list outreach messages (org-scoped, paginated)
+// ?resume_id=  optional filter by resume
+// Outreach messages are created at tailor-time or via /regenerate — no standalone POST.
 export async function GET(req: NextRequest) {
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
@@ -20,55 +17,16 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
     }
 
-    const result = await listOutreachMessages(organizationId);
+    const { searchParams } = new URL(req.url);
+    // PRD uses snake_case param: ?resume_id=
+    const resumeId = searchParams.get("resume_id") ?? undefined;
+    const limit = Math.min(parseInt(searchParams.get("limit") ?? "10"), 100);
+    const offset = parseInt(searchParams.get("offset") ?? "0");
+
+    const result = await listOutreachMessages(organizationId, resumeId, { limit, offset });
     if (!result.success) {
         return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
     return NextResponse.json({ data: result.data });
-}
-
-export async function POST(req: NextRequest) {
-    const { ownerId: organizationId, errResponse } = await authenticate(req);
-    if (errResponse || !organizationId) {
-        return NextResponse.json({ error: "NOT_AUTHORIZED" }, { status: 401 });
-    }
-
-    const plan = await getSubscriptionPlan(organizationId);
-
-    // Check Plan Requirement (PRO/ENTERPRISE)
-    const planCheck = await requirePlan(organizationId, "PRO");
-    if (!planCheck.allowed) {
-        return NextResponse.json({ error: planCheck.error }, { status: 403 });
-    }
-
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
-
-    try {
-        const body = await req.json();
-        const validatedData = generateSchema.parse(body);
-
-        // Record Usage
-        await recordUsage(organizationId, "tailor", validatedData.resumeId);
-
-        const result = await generateOutreach(
-            validatedData.resumeId,
-            organizationId,
-            validatedData.type
-        );
-
-        if (!result.success) {
-            return NextResponse.json({ error: result.error }, { status: 500 });
-        }
-
-        return NextResponse.json({ data: result.data }, { status: 201 });
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            return NextResponse.json({ error: error.message }, { status: 400 });
-        }
-        return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-    }
 }

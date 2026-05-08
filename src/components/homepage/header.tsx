@@ -67,7 +67,7 @@ function Header() {
                                     asChild
                                     className={navigationMenuTriggerStyle()}
                                 >
-                                    <Link href="/">Platform</Link>
+                                    <Link href="/#features">Features</Link>
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>
@@ -75,7 +75,23 @@ function Header() {
                                     asChild
                                     className={navigationMenuTriggerStyle()}
                                 >
-                                    <Link href="/careers">Careers</Link>
+                                    <Link href="/#pricing">Pricing</Link>
+                                </NavigationMenuLink>
+                            </NavigationMenuItem>
+                            <NavigationMenuItem>
+                                <NavigationMenuLink
+                                    asChild
+                                    className={navigationMenuTriggerStyle()}
+                                >
+                                    <Link href="/docs">Docs</Link>
+                                </NavigationMenuLink>
+                            </NavigationMenuItem>
+                            <NavigationMenuItem>
+                                <NavigationMenuLink
+                                    asChild
+                                    className={navigationMenuTriggerStyle()}
+                                >
+                                    <Link href="/docs/reference">API Reference</Link>
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                         </NavigationMenuList>
