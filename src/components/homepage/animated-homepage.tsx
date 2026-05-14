@@ -26,8 +26,7 @@ export default function AnimatedHomePage() {
             className="pt-24"
             variants={containerVariants}
             initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.15 }}
+            animate="visible"
         >
             <motion.div
                 variants={{
@@ -119,26 +118,6 @@ export default function AnimatedHomePage() {
                                 </p>
                                 <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">
                                     Read the docs →
-                                </span>
-                            </div>
-                        </Link>
-
-                        {/* API Reference card */}
-                        <Link
-                            href="/docs/reference"
-                            className="group flex items-start gap-5 rounded-3xl border border-border bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
-                        >
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
-                                <Code2 className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h3 className="mb-1 text-lg font-semibold text-foreground">API Reference</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    Interactive playground to explore every endpoint live — tailor
-                                    resumes, generate cover letters, and test outreach with real requests.
-                                </p>
-                                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">
-                                    Explore the reference →
                                 </span>
                             </div>
                         </Link>

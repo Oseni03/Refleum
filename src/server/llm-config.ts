@@ -1,6 +1,7 @@
 // src/server/llm-config.ts
 // Pure query functions — no auth, no "use server".
 
+import { encryptApiKey } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 import type { LlmConfigPayload, GetLlmConfigResult, UpdateLlmConfigResult } from "@/types";
 
@@ -50,34 +51,48 @@ export async function updateLlmConfig(
         provider: string; model: string; apiKey: string; apiBase: string | null;
         reasoningEffort: string | null; enableCoverLetter: boolean;
         enableOutreachMessage: boolean; contentLanguage: string; defaultPromptId: string;
-        organizationId?: string;
+        organizationId?: string; userId?: string;
     }>
 ): Promise<UpdateLlmConfigResult> {
-    // If id is provided, we try to update based on organizationId or userId
     const existing = await prisma.llmConfig.findFirst({
-        where: {
-            OR: [
-                { organizationId: id },
-                { userId: id }
-            ]
-        }
+        where: { OR: [{ organizationId: id }, { userId: id }] }
     });
+
+    const { organizationId: orgIdOverride, userId: userIdOverride, ...rest } = updates;
+
+    console.log("CONFIG REST", rest);
+
+    // Encrypt apiKey if provided, then strip all undefined fields
+    // so Prisma only touches columns that were explicitly sent
+    const scalarUpdates = Object.fromEntries(
+        Object.entries({
+            ...rest,
+            ...(rest.apiKey !== undefined && {
+                apiKey: encryptApiKey(rest.apiKey)
+            }),
+        }).filter(([, v]) => v !== undefined)
+    );
+
+    console.log("CONFIG SCALAR UPDATES", scalarUpdates);
+
+    if (Object.keys(scalarUpdates).length === 0) {
+        return { success: true }; // nothing to update
+    }
 
     if (existing) {
         await prisma.llmConfig.update({
             where: { id: existing.id },
-            data: updates,
+            data: scalarUpdates,
         });
     } else {
-        // Fallback to create (assumes id is either orgId or userId)
-        // If it's a new config, we might need more info, but for now we follow the upsert logic
         await prisma.llmConfig.create({
             data: {
-                organizationId: updates.organizationId || id,
-                userId: id,
-                ...updates
+                organizationId: orgIdOverride ?? id,
+                userId: userIdOverride ?? null,
+                ...scalarUpdates,
             }
         });
     }
+
     return { success: true };
 }

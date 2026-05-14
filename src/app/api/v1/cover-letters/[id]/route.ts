@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRateLimit } from "@/lib/middleware";
-import { getSubscriptionPlan } from "@/server/subscription";
 import { getCoverLetterById, deleteCoverLetterRecord, updateCoverLetterRecord } from "@/server/cover-letters";
 import { authenticate, parseBody, UpdateCoverLetterSchema } from "@/lib/api";
 
@@ -11,12 +9,6 @@ export async function GET(
     const { id } = await params;
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
-
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
 
     const result = await getCoverLetterById(id, organizationId);
     if (!result.success) {
@@ -35,12 +27,6 @@ export async function PATCH(
     const { id } = await params;
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
-
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
 
     const { data: body, errResponse: bodyErr } = await parseBody(req, UpdateCoverLetterSchema);
     if (bodyErr) return bodyErr;
@@ -61,12 +47,6 @@ export async function DELETE(
     const { id } = await params;
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
-
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
 
     const result = await deleteCoverLetterRecord(id, organizationId);
     if (!result.success) {

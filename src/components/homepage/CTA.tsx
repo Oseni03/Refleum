@@ -16,7 +16,7 @@ function CTA() {
 
                     <div className="flex flex-col justify-center gap-4 sm:flex-row">
                         <Link
-                            href="/signup"
+                            href="/sign-up"
                             className="inline-flex items-center justify-center rounded-xl bg-primary px-8 py-4 text-lg font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25"
                         >
                             Start building

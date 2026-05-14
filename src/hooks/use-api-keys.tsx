@@ -1,96 +1,82 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { ApiKey } from "@better-auth/api-key";
 
-export function useApiKeys() {
-    const { data: session } = authClient.useSession();
-    const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [newKey, setNewKey] = useState<string | null>(null);
-    const [hasCopied, setHasCopied] = useState(false);
+export function useApiKeys(initialKeys: ApiKey[]) {
+    const { data: session, isPending: isSessionLoading } = authClient.useSession();
+    const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
+    const [newKeyName, setNewKeyName] = useState("");
     const [isCreating, setIsCreating] = useState(false);
+    const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
 
-    const loadKeys = async () => {
-        setIsLoading(true);
-        try {
-            // Wait, better auth might not expose listing keys like this.
-            // But per PRD and build-api workflow, maybe we need a dedicated route?
-            // Actually BetterAuth plugin does provide list API or something?
-            // "Client methods: authClient.apiKey.* from src/lib/auth-client.ts only."
-            // Let's use it:
-            const { data } = await authClient.apiKey.list();
-            if (data) {
-                setApiKeys(data.apiKeys as ApiKey[]);
-            }
-        } catch (error) {
-            toast.error("Failed to load API keys.");
-        } finally {
-            setIsLoading(false);
+    const handleCreateKey = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!session || !session.session.activeOrganizationId) {
+            toast.error("You must be signed in with an active organization to create an API key");
+            return;
         }
-    };
 
-    useEffect(() => {
-        if (session?.user) {
-            loadKeys();
-        }
-    }, [session]);
-
-    const handleCreateKey = async (name?: string) => {
         setIsCreating(true);
+
         try {
+            // We remove the explicit userId as Better Auth infers it from the session cookie.
+            // Explicitly passing it can sometimes trigger stricter server-side checks that cause UNAUTHORIZED_SESSION.
             const { data, error } = await authClient.apiKey.create({
-                name: name || "New API Key",
-            });
+                name: newKeyName || `Key ${keys.length + 1}`,
+                organizationId: session.session.activeOrganizationId,
+            })
+
             if (error) {
-                toast.error("Failed to create API key");
-            } else if (data) {
-                setNewKey(data.key);
-                setIsCreateOpen(true);
-                loadKeys();
-                toast.success("API key created");
+                toast.error(error.message || "Failed to create API key")
             }
-        } catch {
-            toast.error("An error occurred");
+
+            if (data) {
+                setKeys([data, ...keys]);
+                setNewlyCreatedKey(data.key);
+                setNewKeyName("");
+                toast.success("API key generated successfully!");
+            }
+        } catch (error: any) {
+            console.error("API Key creation error:", error);
+            toast.error(error.message || "Failed to create API key");
         } finally {
             setIsCreating(false);
         }
     };
 
-    const handleRevoke = async (keyId: string) => {
+    const handleDeleteKey = async (id: string) => {
         try {
-            const { error } = await authClient.apiKey.delete({ keyId });
-            if (error) {
-                toast.error("Failed to revoke key");
-            } else {
-                toast.success("API key revoked");
-                loadKeys();
-            }
-        } catch {
-            toast.error("An error occurred");
+            const { error } = await authClient.apiKey.delete({
+                keyId: id,
+            });
+
+            if (error) throw error;
+
+            setKeys(keys.filter((k) => k.id !== id));
+            toast.success("API key deleted");
+        } catch (error: any) {
+            toast.error(error.message || "Failed to delete key");
         }
     };
 
-    const copyToClipboard = () => {
-        if (newKey) {
-            navigator.clipboard.writeText(newKey);
-            setHasCopied(true);
-            setTimeout(() => setHasCopied(false), 2000);
-            toast.success("Copied to clipboard");
-        }
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.success("Copied to clipboard");
     };
 
     return {
-        apiKeys,
-        isLoading,
-        isCreateOpen,
-        newKey,
-        hasCopied,
+        keys,
         isCreating,
-        setIsCreateOpen,
+        newKeyName,
+        isSessionLoading,
+        newlyCreatedKey,
+        setNewKeyName,
+        setIsCreating,
+        setNewlyCreatedKey,
         handleCreateKey,
-        handleRevoke,
-        copyToClipboard
+        handleDeleteKey,
+        copyToClipboard,
     }
 }

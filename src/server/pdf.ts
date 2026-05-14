@@ -66,6 +66,7 @@ export async function generateCoverLetterPdf(coverLetterId: string, organization
         <!DOCTYPE html>
         <html>
         <head>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
             <style>
                 body { font-family: 'Inter', sans-serif; padding: 40px; line-height: 1.6; color: #1a1a1a; }
                 .content { white-space: pre-wrap; font-family: inherit; }

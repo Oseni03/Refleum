@@ -1,6 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react'
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
 import { Method } from '@/types';
 import { MethodBadge } from './section-header';
+
+// ─── Field types ──────────────────────────────────────────────────────────────
+
+type FieldType = 'text' | 'textarea' | 'select' | 'boolean' | 'file' | 'number';
+
+interface BaseField {
+    key: string;
+    label: string;
+    type: FieldType;
+    options?: string[];
+    placeholder?: string;
+    required?: boolean;
+    defaultValue?: string | boolean | number;
+}
 
 type PlaygroundEndpoint = {
     id: string;
@@ -8,196 +24,436 @@ type PlaygroundEndpoint = {
     path: string;
     label: string;
     hasFileUpload?: boolean;
-    bodyFields?: Array<{
-        key: string; label: string; type: "text" | "textarea" | "select" | "boolean" | "file";
-        options?: string[]; placeholder?: string; required?: boolean;
-    }>;
+    /** Fields sent in the request body (POST / PUT / PATCH). */
+    bodyFields?: BaseField[];
+    /** Fields sent as URL query parameters (GET / DELETE). */
+    queryFields?: BaseField[];
+    /** Path parameter names (e.g. ["id"]). */
     pathParams?: string[];
 };
 
+// ─── Endpoint definitions ─────────────────────────────────────────────────────
+
 const PLAYGROUND_ENDPOINTS: PlaygroundEndpoint[] = [
     {
-        id: "upload",
-        method: "POST",
-        path: "/api/v1/resumes/upload",
-        label: "Upload Resume",
+        id: 'upload',
+        method: 'POST',
+        path: '/api/v1/resumes',
+        label: 'Upload Resume',
         hasFileUpload: true,
         bodyFields: [
-            { key: "set_as_master", label: "Set as master", type: "boolean" },
+            { key: 'set_as_master', label: 'Set as master', type: 'boolean', defaultValue: false },
         ],
     },
     {
-        id: "tailor",
-        method: "POST",
-        path: "/api/v1/resumes/tailor",
-        label: "Tailor Resume",
-        bodyFields: [
-            { key: "job_description", label: "Job Description", type: "textarea", required: true, placeholder: "Paste the full job description here..." },
-            { key: "resume_id", label: "Resume ID (optional)", type: "text", placeholder: "Defaults to master resume" },
-            { key: "strategy", label: "Strategy", type: "select", options: ["nudge", "keywords", "full"] },
-            { key: "generate_cover_letter", label: "Generate cover letter", type: "boolean" },
-            { key: "generate_outreach", label: "Generate outreach", type: "boolean" },
-            { key: "output_language", label: "Output language", type: "select", options: ["en", "es", "zh", "ja", "pt"] },
+        id: 'list-resumes',
+        method: 'GET',
+        path: '/api/v1/resumes',
+        label: 'List Resumes',
+        queryFields: [
+            { key: 'include_master', label: 'include_master', type: 'boolean', defaultValue: true },
+            { key: 'limit', label: 'limit', type: 'number', defaultValue: 10 },
+            { key: 'offset', label: 'offset', type: 'number', defaultValue: 0 },
         ],
     },
     {
-        id: "list-resumes",
-        method: "GET",
-        path: "/api/v1/resumes",
-        label: "List Resumes",
+        id: 'get-resume',
+        method: 'GET',
+        path: '/api/v1/resumes/{id}',
+        label: 'Get Resume',
+        pathParams: ['id'],
+    },
+    {
+        id: 'delete-resume',
+        method: 'DELETE',
+        path: '/api/v1/resumes/{id}',
+        label: 'Delete Resume',
+        pathParams: ['id'],
+    },
+    {
+        id: 'tailor',
+        method: 'POST',
+        path: '/api/v1/resumes/{id}/tailor',
+        label: 'Tailor Resume',
+        pathParams: ['id'],
         bodyFields: [
-            { key: "include_master", label: "include_master (query)", type: "boolean" },
+            { key: 'job_description', label: 'Job Description', type: 'textarea', required: true, placeholder: 'Paste the full job description here…' },
+            { key: 'strategy', label: 'Strategy', type: 'select', options: ['NUDGE', 'KEYWORDS', 'FULL'], defaultValue: 'NUDGE' },
+            { key: 'generate_cover_letter', label: 'Generate cover letter', type: 'boolean', defaultValue: false },
+            { key: 'generate_outreach', label: 'Generate outreach', type: 'boolean', defaultValue: false },
+            { key: 'output_language', label: 'Output language', type: 'select', options: ['en', 'es', 'zh', 'ja', 'pt'], defaultValue: 'en' },
         ],
     },
     {
-        id: "get-resume",
-        method: "GET",
-        path: "/api/v1/resumes/{id}",
-        label: "Get Resume",
-        pathParams: ["id"],
+        id: 'retry-resume',
+        method: 'POST',
+        path: '/api/v1/resumes/{id}/retry',
+        label: 'Retry Parsing',
+        pathParams: ['id'],
     },
     {
-        id: "delete-resume",
-        method: "DELETE",
-        path: "/api/v1/resumes/{id}",
-        label: "Delete Resume",
-        pathParams: ["id"],
-    },
-    {
-        id: "retry-resume",
-        method: "POST",
-        path: "/api/v1/resumes/{id}/retry",
-        label: "Retry Parsing",
-        pathParams: ["id"],
-    },
-    {
-        id: "list-cl",
-        method: "GET",
-        path: "/api/v1/cover-letters",
-        label: "List Cover Letters",
-        bodyFields: [
-            { key: "resume_id", label: "resume_id (query filter)", type: "text", placeholder: "Optional" },
+        id: 'get-resume-pdf',
+        method: 'GET',
+        path: '/api/v1/resumes/{id}/pdf',
+        label: 'Get Resume PDF',
+        pathParams: ['id'],
+        queryFields: [
+            { key: 'format', label: 'format', type: 'text', placeholder: 'Optional' },
         ],
     },
     {
-        id: "regen-cl",
-        method: "POST",
-        path: "/api/v1/cover-letters/{id}/regenerate",
-        label: "Regenerate Cover Letter",
-        pathParams: ["id"],
-        bodyFields: [
-            { key: "job_description", label: "Job Description (optional override)", type: "textarea", placeholder: "Falls back to stored JD" },
+        id: 'list-cl',
+        method: 'GET',
+        path: '/api/v1/cover-letters',
+        label: 'List Cover Letters',
+        queryFields: [
+            { key: 'resume_id', label: 'resume_id', type: 'text', placeholder: 'Optional' },
+            { key: 'limit', label: 'limit', type: 'number', defaultValue: 10 },
+            { key: 'offset', label: 'offset', type: 'number', defaultValue: 0 },
         ],
     },
     {
-        id: "list-out",
-        method: "GET",
-        path: "/api/v1/outreach",
-        label: "List Outreach",
+        id: 'get-cl',
+        method: 'GET',
+        path: '/api/v1/cover-letters/{id}',
+        label: 'Get Cover Letter',
+        pathParams: ['id'],
     },
     {
-        id: "regen-out",
-        method: "POST",
-        path: "/api/v1/outreach/{id}/regenerate",
-        label: "Regenerate Outreach",
-        pathParams: ["id"],
+        id: 'update-cl',
+        method: 'PATCH',
+        path: '/api/v1/cover-letters/{id}',
+        label: 'Update Cover Letter',
+        pathParams: ['id'],
         bodyFields: [
-            { key: "job_description", label: "Job Description (optional override)", type: "textarea", placeholder: "Falls back to stored JD" },
+            { key: 'content', label: 'Content', type: 'text', required: true },
+        ],
+    },
+    {
+        id: 'delete-cl',
+        method: 'DELETE',
+        path: '/api/v1/cover-letters/{id}',
+        label: 'Delete Cover Letter',
+        pathParams: ['id'],
+    },
+    {
+        id: 'regen-cl',
+        method: 'POST',
+        path: '/api/v1/cover-letters/{id}/regenerate',
+        label: 'Regenerate Cover Letter',
+        pathParams: ['id'],
+        bodyFields: [
+            { key: 'job_description', label: 'Job Description (optional override)', type: 'textarea', placeholder: 'Falls back to stored JD' },
+        ],
+    },
+    {
+        id: 'get-cl-pdf',
+        method: 'GET',
+        path: '/api/v1/cover-letters/{id}/pdf',
+        label: 'Get Cover Letter PDF',
+        pathParams: ['id'],
+        queryFields: [
+            { key: 'format', label: 'Format', type: 'select', options: ['A4', 'Letter'], defaultValue: 'A4' },
+        ],
+    },
+    {
+        id: 'list-outreach',
+        method: 'GET',
+        path: '/api/v1/outreach',
+        label: 'List Outreach',
+        queryFields: [
+            { key: 'resume_id', label: 'resume_id', type: 'text', placeholder: 'Optional' },
+            { key: 'limit', label: 'limit', type: 'number', defaultValue: 10 },
+            { key: 'offset', label: 'offset', type: 'number', defaultValue: 0 },
+        ],
+    },
+    {
+        id: 'get-outreach',
+        method: 'GET',
+        path: '/api/v1/outreach/{id}',
+        label: 'Get Outreach',
+        pathParams: ['id'],
+    },
+    {
+        id: 'update-outreach',
+        method: 'PATCH',
+        path: '/api/v1/outreach/{id}',
+        label: 'Update Outreach',
+        pathParams: ['id'],
+        bodyFields: [
+            { key: 'content', label: 'Content', type: 'text', required: true },
+        ],
+    },
+    {
+        id: 'delete-outreach',
+        method: 'DELETE',
+        path: '/api/v1/outreach/{id}',
+        label: 'Delete Outreach',
+        pathParams: ['id'],
+    },
+    {
+        id: 'regen-outreach',
+        method: 'POST',
+        path: '/api/v1/outreach/{id}/regenerate',
+        label: 'Regenerate Outreach',
+        pathParams: ['id'],
+        bodyFields: [
+            { key: 'job_description', label: 'Job Description (optional override)', type: 'textarea', placeholder: 'Falls back to stored JD' },
+        ],
+    },
+    {
+        id: 'get-llm-config',
+        method: 'GET',
+        path: '/api/v1/llm-config',
+        label: 'Get LLM Config',
+    },
+    {
+        id: 'update-llm-config',
+        method: 'PUT',
+        path: '/api/v1/llm-config',
+        label: 'Update LLM Config',
+        bodyFields: [
+            { key: 'provider', label: 'Provider', type: 'select', options: ['openai', 'anthropic', 'openai_compatible', 'deepseek', 'openrouter', 'ollama', 'gemini'], required: true, defaultValue: 'openai' },
+            { key: 'model', label: 'Model', type: 'text', placeholder: 'e.g. gpt-4o, deepseek-chat', required: true, defaultValue: 'gpt-4o' },
+            { key: 'api_key', label: 'API Key', type: 'text', required: true },
+            { key: 'api_base', label: 'API base URL', type: 'text' },
+            { key: 'reasoning_effort', label: 'Reasoning effort', type: 'select', options: ['high', 'medium', 'low', 'minimal'] },
+            { key: 'enable_cover_letter', label: 'Enable cover letter', type: 'boolean', defaultValue: false },
+            { key: 'enable_outreach', label: 'Enable outreach', type: 'boolean', defaultValue: false },
+            { key: 'content_language', label: 'Content language', type: 'select', options: ['en', 'es', 'zh', 'ja', 'pt'], defaultValue: 'en' },
+            { key: 'default_prompt_id', label: 'Default prompt ID', type: 'select', options: ["NUDGE", "KEYWORDS", "FULL"], defaultValue: "KEYWORDS" },
         ],
     },
 ];
 
+// ─── Field value types ────────────────────────────────────────────────────────
+
+type FieldValue = string | boolean | number;
+
+function defaultsFor(endpoint: PlaygroundEndpoint): Record<string, FieldValue> {
+    const out: Record<string, FieldValue> = {};
+    const allFields = [...(endpoint.queryFields ?? []), ...(endpoint.bodyFields ?? [])];
+    for (const f of allFields) {
+        if (f.defaultValue !== undefined) out[f.key] = f.defaultValue;
+    }
+    return out;
+}
+
+// ─── Response type ────────────────────────────────────────────────────────────
+
+interface ApiResponse {
+    status: number;
+    body: string;
+    isPdf?: boolean;
+    pdfUrl?: string;
+}
+
+// ─── Playground component ─────────────────────────────────────────────────────
+
 function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
-    const [selectedId, setSelectedId] = useState("upload");
-    const [apiKey, setApiKey] = useState(apiKeyFromParent ?? "");
+    const [selectedId, setSelectedId] = useState('upload');
+    const [apiKey, setApiKey] = useState(apiKeyFromParent ?? '');
     const [pathValues, setPathValues] = useState<Record<string, string>>({});
-    const [fieldValues, setFieldValues] = useState<Record<string, string | boolean>>({});
+    const [fieldValues, setFieldValues] = useState<Record<string, FieldValue>>({});
     const [file, setFile] = useState<File | null>(null);
-    const [response, setResponse] = useState<{ status: number; body: string } | null>(null);
+    const [response, setResponse] = useState<ApiResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
     const endpoint = PLAYGROUND_ENDPOINTS.find((e) => e.id === selectedId)!;
 
-    // Reset fields on endpoint change
+    // Reset state and apply default values when endpoint changes
     useEffect(() => {
         setPathValues({});
-        setFieldValues({});
+        setFieldValues(defaultsFor(endpoint));
         setFile(null);
         setResponse(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId]);
 
+    /** Path with {param} tokens replaced by user-entered values */
     const resolvedPath = (endpoint.pathParams ?? []).reduce(
         (p, param) => p.replace(`{${param}}`, pathValues[param] ?? `{${param}}`),
         endpoint.path
     );
 
+    // ── Determine which field set is "active" for this endpoint ──────────────
+    const isReadOrDelete = endpoint.method === 'GET' || endpoint.method === 'DELETE';
+    /** Fields that contribute to the query string (GET / DELETE) */
+    const activeQueryFields = isReadOrDelete ? (endpoint.queryFields ?? []) : [];
+    /** Fields that contribute to the request body (POST / PUT / PATCH) */
+    const activeBodyFields = !isReadOrDelete ? (endpoint.bodyFields ?? []).filter((f) => f.type !== 'file') : [];
+
+    // ── Build & send the real request ─────────────────────────────────────────
     const handleSend = async () => {
-        if (!apiKey) { alert("Enter your API key first."); return; }
+        if (!apiKey) {
+            alert('Enter your API key first.');
+            return;
+        }
+
         setLoading(true);
         setResponse(null);
 
+        // Clean up any previous blob URL
+        if (response?.pdfUrl) {
+            URL.revokeObjectURL(response.pdfUrl);
+        }
+
         try {
-            const BASE = process.env.NEXT_PUBLIC_API_URL;
+            const BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
             let url = `${BASE}${resolvedPath}`;
 
-            const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
+            const headers: Record<string, string> = {
+                Authorization: `Bearer ${apiKey}`,
+            };
             let body: BodyInit | undefined;
 
-            if (endpoint.method === "GET" || endpoint.method === "DELETE") {
-                // query params
+            if (isReadOrDelete) {
+                // Append query parameters
                 const qs = new URLSearchParams();
-                (endpoint.bodyFields ?? []).forEach((f) => {
+                for (const f of activeQueryFields) {
                     const val = fieldValues[f.key];
-                    if (val !== undefined && val !== "" && val !== false) qs.set(f.key, String(val));
-                });
+                    // Only append if a meaningful value is present
+                    if (val !== undefined && val !== '' && val !== false) {
+                        qs.set(f.key, String(val));
+                    }
+                }
                 if (qs.toString()) url += `?${qs.toString()}`;
             } else if (endpoint.hasFileUpload) {
+                // Multipart form data — do NOT set Content-Type; browser sets boundary
                 const fd = new FormData();
-                if (file) fd.append("file", file);
-                (endpoint.bodyFields ?? []).forEach((f) => {
+                if (file) fd.append('file', file);
+                for (const f of endpoint.bodyFields ?? []) {
                     const val = fieldValues[f.key];
-                    if (val !== undefined && val !== "") fd.append(f.key, String(val));
-                });
+                    if (val !== undefined && val !== '' && val !== false) {
+                        fd.append(f.key, String(val));
+                    }
+                }
                 body = fd;
             } else {
+                // JSON body
                 const json: Record<string, unknown> = {};
-                (endpoint.bodyFields ?? []).forEach((f) => {
+                for (const f of activeBodyFields) {
                     const val = fieldValues[f.key];
-                    if (val !== undefined && val !== "") {
-                        json[f.key] = f.type === "boolean" ? val : val;
+                    // Include the field if it has any value (including false for booleans)
+                    if (val !== undefined && val !== '') {
+                        json[f.key] = val;
                     }
-                });
-                headers["Content-Type"] = "application/json";
+                }
+                headers['Content-Type'] = 'application/json';
                 body = JSON.stringify(json);
             }
 
-            // Simulate response for demo (real implementation would fetch)
-            await new Promise((r) => setTimeout(r, 900 + Math.random() * 600));
-            const mockStatuses: Record<Method, number> = { POST: 201, GET: 200, PATCH: 200, DELETE: 200 };
-            const mockBodies: Record<string, object> = {
-                upload: { resume_id: "res_01jwzxy8k3p5q", is_master: true, status: "PROCESSING", filename: file?.name ?? "resume.pdf" },
-                tailor: { resume_id: "res_01jx2abc99def", title: "Senior Engineer @ Acme Corp", strategy: fieldValues["strategy"] ?? "nudge", refinement_stats: { passes_completed: 3, keywords_injected: 5, ai_phrases_removed: ["leveraged", "spearheaded"], alignment_violations_fixed: 0, initial_match_percentage: 54.2, final_match_percentage: 81.7 }, rejected_changes: 1, cover_letter_id: fieldValues["generate_cover_letter"] ? "cl_01jx2cover" : null, outreach_id: fieldValues["generate_outreach"] ? "out_01jx2reach" : null, warnings: [] },
-                "list-resumes": { data: [{ resume_id: "res_01jwzxy8k3p5q", is_master: true, filename: "resume.pdf", status: "READY", updated_at: new Date().toISOString() }], total: 1 },
-                "get-resume": { resume_id: pathValues["id"] ?? "res_xxx", is_master: false, status: "READY", structured_data: { personalInfo: { name: "Jane Smith" } } },
-                "delete-resume": { deleted: true },
-                "retry-resume": { resume_id: pathValues["id"] ?? "res_xxx", status: "PROCESSING" },
-                "list-cl": { data: [], total: 0 },
-                "regen-cl": { cover_letter_id: pathValues["id"] ?? "cl_xxx", content: "Dear Hiring Manager, ...", updated_at: new Date().toISOString() },
-                "list-out": { data: [], total: 0 },
-                "regen-out": { outreach_id: pathValues["id"] ?? "out_xxx", content: "Hi [Name], I came across your posting for...", updated_at: new Date().toISOString() },
-            };
+            const res = await fetch(url, { method: endpoint.method, headers, body });
 
-            setResponse({
-                status: mockStatuses[endpoint.method],
-                body: JSON.stringify(mockBodies[selectedId] ?? { ok: true }, null, 2),
-            });
+            const contentType = res.headers.get('content-type') ?? '';
+
+            // ── PDF response ───────────────────────────────────────────────────────
+            if (contentType.includes('application/pdf')) {
+                const blob = await res.blob();
+                const pdfUrl = URL.createObjectURL(blob);
+                const size = blob.size;
+                setResponse({
+                    status: res.status,
+                    body: `[PDF — ${(size / 1024).toFixed(1)} KB]  Click "Open PDF" to view.`,
+                    isPdf: true,
+                    pdfUrl,
+                });
+                return;
+            }
+
+            // ── JSON / text response ───────────────────────────────────────────────
+            let responseBody: string;
+            try {
+                const data = await res.json();
+                responseBody = JSON.stringify(data, null, 2);
+            } catch {
+                responseBody = await res.text();
+            }
+
+            setResponse({ status: res.status, body: responseBody });
         } catch (err) {
-            setResponse({ status: 0, body: String(err) });
+            setResponse({ status: 0, body: err instanceof Error ? err.message : String(err) });
         } finally {
             setLoading(false);
         }
     };
+
+    // ── Field renderer ─────────────────────────────────────────────────────────
+    const renderField = (field: BaseField) => {
+        const val = fieldValues[field.key];
+
+        if (field.type === 'textarea') {
+            return (
+                <textarea
+                    rows={4}
+                    value={String(val ?? '')}
+                    onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+            );
+        }
+
+        if (field.type === 'select') {
+            return (
+                <select
+                    value={String(val ?? field.options![0])}
+                    onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                >
+                    {field.options!.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                    ))}
+                </select>
+            );
+        }
+
+        if (field.type === 'boolean') {
+            const checked = Boolean(val);
+            return (
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setFieldValues((p) => ({ ...p, [field.key]: !p[field.key] }))}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-muted'}`}
+                        aria-pressed={checked}
+                    >
+                        <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-4' : 'translate-x-1'}`}
+                        />
+                    </button>
+                    <span className="text-xs text-muted-foreground">{checked ? 'true' : 'false'}</span>
+                </div>
+            );
+        }
+
+        if (field.type === 'number') {
+            return (
+                <input
+                    type="number"
+                    value={val !== undefined ? String(val) : ''}
+                    onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.valueAsNumber }))}
+                    placeholder={field.placeholder}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+            );
+        }
+
+        // text (default)
+        return (
+            <input
+                type="text"
+                value={String(val ?? '')}
+                onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+        );
+    };
+
+    // ── Status badge helpers ───────────────────────────────────────────────────
+    const isSuccess = response && response.status >= 200 && response.status < 300;
 
     return (
         <div id="playground" className="scroll-mt-6 rounded-2xl border border-border overflow-hidden bg-card">
@@ -209,24 +465,37 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
             </div>
 
             <div className="grid lg:grid-cols-[220px_1fr] divide-x divide-border">
-                {/* Endpoint selector */}
-                <div className="p-3 space-y-0.5 overflow-y-auto max-h-[600px]">
+                {/* ── Sidebar: endpoint selector ──────────────────────────────────── */}
+                <nav className="p-3 space-y-0.5 overflow-y-auto max-h-[600px]">
                     {PLAYGROUND_ENDPOINTS.map((ep) => (
                         <button
                             key={ep.id}
+                            type="button"
                             onClick={() => setSelectedId(ep.id)}
-                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition-colors text-sm ${selectedId === ep.id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition-colors text-sm ${selectedId === ep.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                }`}
                         >
-                            <span className={`text-[10px] font-bold w-12 shrink-0 ${ep.method === "GET" ? "text-blue-500" : ep.method === "POST" ? "text-emerald-500" : ep.method === "DELETE" ? "text-red-500" : "text-amber-500"}`}>
+                            <span
+                                className={`text-[10px] font-bold w-12 shrink-0 ${ep.method === 'GET'
+                                    ? 'text-blue-500'
+                                    : ep.method === 'POST'
+                                        ? 'text-emerald-500'
+                                        : ep.method === 'DELETE'
+                                            ? 'text-red-500'
+                                            : 'text-amber-500'
+                                    }`}
+                            >
                                 {ep.method}
                             </span>
                             <span className="truncate">{ep.label}</span>
                         </button>
                     ))}
-                </div>
+                </nav>
 
-                {/* Request builder */}
-                <div className="p-5 space-y-5">
+                {/* ── Main: request builder ────────────────────────────────────────── */}
+                <div className="p-5 space-y-5 overflow-y-auto max-h-[600px]">
                     {/* API Key */}
                     <div>
                         <label className="block text-xs font-medium text-muted-foreground mb-1.5">API Key</label>
@@ -240,7 +509,7 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
                     </div>
 
                     {/* Resolved URL */}
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 border border-border">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 border border-border overflow-hidden">
                         <MethodBadge method={endpoint.method} />
                         <code className="text-xs font-mono text-muted-foreground truncate">{resolvedPath}</code>
                     </div>
@@ -254,7 +523,7 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
                                     <label className="block text-xs font-medium text-muted-foreground mb-1">{param}</label>
                                     <input
                                         type="text"
-                                        value={pathValues[param] ?? ""}
+                                        value={pathValues[param] ?? ''}
                                         onChange={(e) => setPathValues((p) => ({ ...p, [param]: e.target.value }))}
                                         placeholder={`Enter ${param}`}
                                         className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -269,8 +538,14 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
                         <div>
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">File Upload</p>
                             <div
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => fileRef.current?.click()}
-                                className={`relative cursor-pointer flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 transition-colors ${file ? "border-emerald-500/40 bg-emerald-500/5" : "border-border hover:border-primary/40 hover:bg-muted/30"}`}
+                                onKeyDown={(e) => e.key === 'Enter' && fileRef.current?.click()}
+                                className={`relative cursor-pointer flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 transition-colors ${file
+                                    ? 'border-emerald-500/40 bg-emerald-500/5'
+                                    : 'border-border hover:border-primary/40 hover:bg-muted/30'
+                                    }`}
                             >
                                 <input
                                     ref={fileRef}
@@ -281,14 +556,20 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
                                 />
                                 {file ? (
                                     <>
-                                        <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
                                         <p className="text-sm font-medium text-foreground">{file.name}</p>
                                         <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
                                     </>
                                 ) : (
                                     <>
-                                        <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                                        <p className="text-sm text-muted-foreground">Drop PDF or DOCX here, or <span className="text-primary">browse</span></p>
+                                        <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                        <p className="text-sm text-muted-foreground">
+                                            Drop PDF or DOCX here, or <span className="text-primary">browse</span>
+                                        </p>
                                         <p className="text-xs text-muted-foreground/60">Max 4 MB</p>
                                     </>
                                 )}
@@ -296,86 +577,105 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
                         </div>
                     )}
 
-                    {/* Body fields */}
-                    {(endpoint.bodyFields ?? []).filter((f) => f.type !== "file").length > 0 && (
+                    {/* Query fields (GET / DELETE) */}
+                    {activeQueryFields.length > 0 && (
                         <div className="space-y-3">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                {endpoint.method === "GET" ? "Query Parameters" : "Request Body"}
-                            </p>
-                            {endpoint.bodyFields!.filter((f) => f.type !== "file").map((field) => (
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Query Parameters</p>
+                            {activeQueryFields.map((field) => (
                                 <div key={field.key}>
                                     <label className="block text-xs font-medium text-muted-foreground mb-1">
                                         {field.label}
                                         {field.required && <span className="ml-1 text-red-400">*</span>}
                                     </label>
-                                    {field.type === "textarea" ? (
-                                        <textarea
-                                            rows={4}
-                                            value={String(fieldValues[field.key] ?? "")}
-                                            onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.value }))}
-                                            placeholder={field.placeholder}
-                                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                        />
-                                    ) : field.type === "select" ? (
-                                        <select
-                                            value={String(fieldValues[field.key] ?? field.options![0])}
-                                            onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.value }))}
-                                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                        >
-                                            {field.options!.map((o) => <option key={o} value={o}>{o}</option>)}
-                                        </select>
-                                    ) : field.type === "boolean" ? (
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => setFieldValues((p) => ({ ...p, [field.key]: !p[field.key] }))}
-                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${fieldValues[field.key] ? "bg-primary" : "bg-muted"}`}
-                                            >
-                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${fieldValues[field.key] ? "translate-x-4" : "translate-x-1"}`} />
-                                            </button>
-                                            <span className="text-xs text-muted-foreground">{fieldValues[field.key] ? "true" : "false"}</span>
-                                        </div>
-                                    ) : (
-                                        <input
-                                            type="text"
-                                            value={String(fieldValues[field.key] ?? "")}
-                                            onChange={(e) => setFieldValues((p) => ({ ...p, [field.key]: e.target.value }))}
-                                            placeholder={field.placeholder}
-                                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                        />
-                                    )}
+                                    {renderField(field)}
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    {/* Send */}
+                    {/* Body fields (POST / PUT / PATCH) */}
+                    {activeBodyFields.length > 0 && (
+                        <div className="space-y-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Request Body</p>
+                            {activeBodyFields.map((field) => (
+                                <div key={field.key}>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                        {field.label}
+                                        {field.required && <span className="ml-1 text-red-400">*</span>}
+                                    </label>
+                                    {renderField(field)}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Send button */}
                     <button
+                        type="button"
                         onClick={handleSend}
                         disabled={loading}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                     >
                         {loading ? (
                             <>
-                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
                                 Sending…
                             </>
                         ) : (
                             <>
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
                                 Send Request
                             </>
                         )}
                     </button>
 
-                    {/* Response */}
+                    {/* Response panel */}
                     {response && (
                         <div className="rounded-xl border border-border overflow-hidden">
-                            <div className={`flex items-center gap-2 px-4 py-2.5 border-b border-border text-xs font-medium ${response.status >= 200 && response.status < 300 ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-400"}`}>
-                                <span className="font-bold">{response.status}</span>
-                                <span>{response.status >= 200 && response.status < 300 ? "Success" : "Error"}</span>
-                                <span className="ml-auto text-muted-foreground font-normal">Response</span>
+                            {/* Status bar */}
+                            <div
+                                className={`flex items-center gap-2 px-4 py-2.5 border-b border-border text-xs font-medium ${response.status === 0
+                                    ? 'bg-yellow-500/10 text-yellow-400'
+                                    : isSuccess
+                                        ? 'bg-emerald-500/10 text-emerald-500'
+                                        : 'bg-red-500/10 text-red-400'
+                                    }`}
+                            >
+                                <span className="font-bold">
+                                    {response.status === 0 ? 'ERR' : response.status}
+                                </span>
+                                <span>
+                                    {response.status === 0
+                                        ? 'Network error'
+                                        : isSuccess
+                                            ? 'Success'
+                                            : 'Error'}
+                                </span>
+
+                                {/* PDF open link */}
+                                {response.isPdf && response.pdfUrl && (
+                                    <a
+                                        href={response.pdfUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-auto text-primary underline underline-offset-2 font-normal"
+                                    >
+                                        Open PDF ↗
+                                    </a>
+                                )}
+
+                                {!response.isPdf && (
+                                    <span className="ml-auto text-muted-foreground font-normal">Response</span>
+                                )}
                             </div>
-                            <pre className="p-4 text-xs text-zinc-300 overflow-x-auto bg-[#0d0d0d] leading-relaxed max-h-72">
+
+                            {/* Response body */}
+                            <pre className="p-4 text-xs text-zinc-300 overflow-x-auto bg-[#0d0d0d] leading-relaxed max-h-72 whitespace-pre-wrap break-words">
                                 {response.body}
                             </pre>
                         </div>
@@ -386,4 +686,4 @@ function Playground({ apiKeyFromParent }: { apiKeyFromParent?: string }) {
     );
 }
 
-export default Playground
+export default Playground;

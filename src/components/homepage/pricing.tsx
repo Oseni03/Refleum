@@ -83,7 +83,7 @@ function Pricing() {
                                     </Button>
                                 ) : (
                                     <Link
-                                        href="/signup"
+                                        href="/sign-up"
                                         className={`inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition-all ${isPopular
                                             ? "bg-primary text-primary-foreground hover:opacity-90"
                                             : "border border-border text-foreground hover:bg-accent"

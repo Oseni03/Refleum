@@ -36,7 +36,7 @@ function Hero() {
                     <Terminal className="h-4 w-4 shrink-0 text-primary" />
                     <code className="text-xs font-mono text-muted-foreground">
                         <span className="text-primary">POST</span>{" "}
-                        /api/resumes/tailor
+                        /api/v1/resumes/:resumeId/tailor
                         {"  "}
                         <span className="opacity-50">→ 201 in &lt; 30 s</span>
                     </code>
@@ -56,12 +56,6 @@ function Hero() {
                         className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
                     >
                         Read the docs
-                    </Link>
-                    <Link
-                        href="/docs/reference"
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                    >
-                        API Reference
                     </Link>
                 </div>
 

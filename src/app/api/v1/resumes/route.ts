@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRateLimit } from "@/lib/middleware";
-import { getSubscriptionPlan, recordUsage } from "@/server/subscription";
+import { recordUsage } from "@/server/subscription";
 import { listResumes, createResumeRecord } from "@/server/resumes";
 import { parseResume, isAllowedMimeType, MAX_FILE_SIZE_BYTES } from "@/lib/parser";
 import { ResumeStatus } from "@prisma/client";
@@ -12,16 +11,9 @@ export async function GET(req: NextRequest) {
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
 
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
-
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "10"), 100);
     const offset = parseInt(searchParams.get("offset") ?? "0");
-    // PRD uses snake_case query param (FR-091): ?include_master=true
     const includeMaster = searchParams.get("include_master") === "true";
 
     const result = await listResumes(organizationId, includeMaster, { limit, offset });
@@ -33,12 +25,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
-
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
 
     try {
         const formData = await req.formData();
@@ -85,7 +71,7 @@ export async function POST(req: NextRequest) {
 
         if (parseResult.success) {
             status = ResumeStatus.READY;
-            structuredData = parseResult.data.structuredData;
+            structuredData = parseResult.data.structuredData || {};
             originalMarkdown = parseResult.data.originalMarkdown;
         } else {
             // FR-004 — persist as failed; resume_id is still returned

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRateLimit } from "@/lib/middleware";
 import { listCoverLetters } from "@/server/cover-letters";
-import { getSubscriptionPlan } from "@/server/subscription";
 import { authenticate } from "@/lib/api";
 
 // GET /api/v1/cover-letters — list cover letters (org-scoped, paginated)
@@ -11,14 +9,7 @@ export async function GET(req: NextRequest) {
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
 
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
-
     const { searchParams } = new URL(req.url);
-    // PRD uses snake_case param: ?resume_id= (FR-090 equivalent for cover letters)
     const resumeId = searchParams.get("resume_id") ?? undefined;
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "10"), 100);
     const offset = parseInt(searchParams.get("offset") ?? "0");

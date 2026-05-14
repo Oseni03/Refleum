@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePlan, requireRateLimit } from "@/lib/middleware";
-import { getSubscriptionPlan } from "@/server/subscription";
+import { requirePlan } from "@/lib/middleware";
 import { regenerateOutreach } from "@/server/outreach";
-import { authenticate } from "@/lib/api";
+import { authenticate, parseBody } from "@/lib/api";
 import { z } from "zod";
 
 const regenerateSchema = z.object({
@@ -18,34 +17,22 @@ export async function POST(
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
 
-    const plan = await getSubscriptionPlan(organizationId);
-
     // Plan gate: Starter+ required for AI regeneration
     const planCheck = await requirePlan(organizationId, "STARTER");
     if (!planCheck.allowed) {
         return NextResponse.json({ error: planCheck.error }, { status: 403 });
     }
 
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
+    const { data: body, errResponse: bodyErr } = await parseBody(req, regenerateSchema);
+    if (bodyErr) return bodyErr;
 
-    // Body is optional — fall back to stored JD if not provided
-    let jobDescription: string | undefined;
-    try {
-        const body = await req.json().catch(() => ({}));
-        const parsed = regenerateSchema.safeParse(body);
-        if (parsed.success) jobDescription = parsed.data.job_description;
-    } catch {
-        // ignore — fall back to stored JD
-    }
+    const jobDescription = body?.job_description;
 
     const result = await regenerateOutreach(id, organizationId, jobDescription);
     if (!result.success) {
         const status =
             result.error === "NOT_FOUND" ? 404 :
-            result.error === "NO_JOB_DESCRIPTION" ? 400 : 500;
+                result.error === "NO_JOB_DESCRIPTION" ? 400 : 500;
         return NextResponse.json({ error: result.error }, { status });
     }
 

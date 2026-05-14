@@ -123,16 +123,7 @@ export async function requireApiKey(req: NextRequest): Promise<ApiKeyAuthResult>
 
     if (!rawKey) return { valid: false, organizationId: null, error: "MISSING_KEY" };
 
-    type VerifyResult = {
-        valid: boolean;
-        key?: { referenceId?: string | null };
-    };
-
-    const result = await (
-        auth.api as unknown as {
-            verifyApiKey: (opts: { body: { key: string } }) => Promise<VerifyResult>;
-        }
-    ).verifyApiKey({ body: { key: rawKey } });
+    const result = await auth.api.verifyApiKey({ body: { key: rawKey } });
 
     // The referenceId attached to the API key represents the organization ID
     if (!result.valid || !result.key?.referenceId) {
@@ -177,7 +168,10 @@ export async function requirePlan(
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 
-const redis = Redis.fromEnv();
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+})
 
 const PLAN_RATE_LIMITS: Record<string, { requests: number; window: string }> = {
     FREE: { requests: 1, window: "1 m" },

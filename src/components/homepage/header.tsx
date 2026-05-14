@@ -86,14 +86,6 @@ function Header() {
                                     <Link href="/docs">Docs</Link>
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
-                            <NavigationMenuItem>
-                                <NavigationMenuLink
-                                    asChild
-                                    className={navigationMenuTriggerStyle()}
-                                >
-                                    <Link href="/docs/reference">API Reference</Link>
-                                </NavigationMenuLink>
-                            </NavigationMenuItem>
                         </NavigationMenuList>
                     </NavigationMenu>
                 </div>
@@ -127,7 +119,7 @@ function Header() {
                             </Link>
                             <Link
                                 className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-                                href="/signup"
+                                href="/sign-up"
                             >
                                 Sign up
                             </Link>

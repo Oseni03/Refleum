@@ -3,16 +3,8 @@ import { requirePlan } from "@/lib/middleware";
 import { tailorResume } from "@/server/resumes";
 import { TailorStrategy } from "@prisma/client";
 import { z } from "zod";
-import { authenticate, parseBody } from "@/lib/api";
+import { authenticate, parseBody, tailorSchema } from "@/lib/api";
 import { recordUsage } from "@/server/subscription";
-
-const tailorSchema = z.object({
-    jobDescription: z.string().min(50),
-    strategy: z.enum(TailorStrategy).optional(),
-    generate_cover_letter: z.boolean().optional().default(false), // FR-021/FR-027
-    generate_outreach: z.boolean().optional().default(false),    // FR-021/FR-028
-    outputLanguage: z.string().optional(),
-});
 
 export async function POST(
     req: NextRequest,
@@ -41,10 +33,10 @@ export async function POST(
 
         const tailorPromise = tailorResume(organizationId, {
             resumeId: id, jobDescription: body.jobDescription,
-            strategy: body.strategy as TailorStrategy,
-            outputLanguage: body.outputLanguage,
-            generateCoverLetter: body.generate_cover_letter,
-            generateOutreach: body.generate_outreach,
+            strategy: body.strategy?.toUpperCase() as TailorStrategy,
+            outputLanguage: body.outputLanguage?.toLowerCase(),
+            generateCoverLetter: body.generateCoverLetter,
+            generateOutreach: body.generateOutreach,
         });
 
         const [result] = await Promise.all([

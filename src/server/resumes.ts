@@ -347,9 +347,18 @@ export async function tailorResume(
 
             if (clResult.status === "fulfilled" && clResult.value?.success) {
                 coverLetterId = clResult.value.data.id;
+            } else if (clResult.status === "rejected") {
+                console.error("Cover letter generation rejected:", clResult.reason);
+            } else if (clResult.status === "fulfilled" && clResult.value && !clResult.value.success) {
+                console.error("Cover letter generation failed:", clResult.value.error);
             }
+
             if (outResult.status === "fulfilled" && outResult.value?.success) {
                 outreachId = outResult.value.data.id;
+            } else if (outResult.status === "rejected") {
+                console.error("Outreach generation rejected:", outResult.reason);
+            } else if (outResult.status === "fulfilled" && outResult.value && !outResult.value.success) {
+                console.error("Outreach generation failed:", outResult.value.error);
             }
         }
 
