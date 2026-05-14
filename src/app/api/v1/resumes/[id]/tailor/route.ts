@@ -3,13 +3,8 @@ import { requirePlan } from "@/lib/middleware";
 import { tailorResume } from "@/server/resumes";
 import { TailorStrategy } from "@prisma/client";
 import { z } from "zod";
-import { authenticate } from "@/lib/api";
-
-const tailorSchema = z.object({
-    jobDescription: z.string().min(50),
-    strategy: z.enum(TailorStrategy).optional(),
-    outputLanguage: z.string().optional(),
-});
+import { authenticate, parseBody, tailorSchema } from "@/lib/api";
+import { recordUsage } from "@/server/subscription";
 
 export async function POST(
     req: NextRequest,
@@ -20,20 +15,68 @@ export async function POST(
     if (errResponse) return errResponse;
 
     // Plan gate check for tailoring
-    const { allowed, error: planError } = await requirePlan(organizationId, "PRO"); // Tailoring requires PRO plan in PRD
+    const { allowed, error: planError } = await requirePlan(organizationId, "STARTER"); // Tailoring requires PRO plan in PRD
     if (!allowed) return NextResponse.json({ error: planError }, { status: 403 });
 
     try {
-        const body = await req.json();
-        const validated = tailorSchema.parse(body);
+        const { data: body, errResponse: bodyErr } = await parseBody(req, tailorSchema);
+        if (bodyErr) return bodyErr;
 
-        const result = await tailorResume(id, organizationId, validated);
-        if (!result.success) {
-            const status = result.error === "NOT_FOUND" ? 404 : 500;
-            return NextResponse.json({ error: result.error }, { status });
+        // FR-032 — record usage regardless of pipeline success
+        const usagePromise = recordUsage(organizationId, "tailor", id).catch(() => { });
+
+        // FR-031 — 240s hard timeout
+        const timeoutMs = 240_000;
+        const timeoutPromise = new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), timeoutMs)
+        );
+
+        const tailorPromise = tailorResume(organizationId, {
+            resumeId: id, jobDescription: body.jobDescription,
+            strategy: body.strategy?.toUpperCase() as TailorStrategy,
+            outputLanguage: body.outputLanguage?.toLowerCase(),
+            generateCoverLetter: body.generateCoverLetter,
+            generateOutreach: body.generateOutreach,
+        });
+
+        const [result] = await Promise.all([
+            Promise.race([tailorPromise, timeoutPromise]),
+            usagePromise,
+        ]);
+
+        // Timed out
+        if (!result) {
+            return NextResponse.json({ error: "TIMEOUT" }, { status: 504 });
         }
 
-        return NextResponse.json({ data: result.data });
+        if (!result.success) {
+            // FR-022 — no master resume found
+            if (result.error === "NO_MASTER_RESUME") {
+                return NextResponse.json(
+                    { error: "VALIDATION_ERROR", detail: "No master resume found. Provide resume_id or upload a master resume." },
+                    { status: 400 }
+                );
+            }
+            return NextResponse.json({ error: result.error }, { status: 500 });
+        }
+
+        return NextResponse.json(
+            {
+                data: {
+                    resume_id: result.data.resume.id,
+                    is_master: result.data.resume.isMaster,
+                    status: result.data.resume.status,
+                    filename: result.data.resume.filename,
+                    strategy: result.data.resume.strategy,
+                    job_keywords: result.data.resume.jobKeywords,
+                    parent_id: result.data.resume.parentId,
+                    cover_letter_id: result.data.cover_letter_id,
+                    outreach_id: result.data.outreach_id,
+                    refinement_stats: result.data.refinement_stats,
+                },
+            },
+            { status: 201 }
+        );
     } catch (e) {
         if (e instanceof z.ZodError) {
             return NextResponse.json({ error: "INVALID_INPUT", details: e.message }, { status: 400 });

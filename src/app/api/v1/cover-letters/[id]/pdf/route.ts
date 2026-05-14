@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRateLimit } from "@/lib/middleware";
-import { getSubscriptionPlan, recordUsage } from "@/server/subscription";
+import { recordUsage } from "@/server/subscription";
 import { generateCoverLetterPdf } from "@/server/pdf";
 import { authenticate } from "@/lib/api";
 
@@ -12,12 +11,6 @@ export async function GET(
 
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
-
-    const plan = await getSubscriptionPlan(organizationId);
-    const rateLimit = await requireRateLimit(organizationId, plan);
-    if (!rateLimit.allowed) {
-        return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-    }
 
     try {
         // Record Usage (costs 1 pdf_export operation - standardizing)

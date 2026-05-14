@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { generateOutreachMessage } from "@/lib/cover-letter";
+import { getResumeById } from "./resumes";
 
 const outreachSelect = {
     id: true,
@@ -115,17 +117,69 @@ export async function deleteOutreachRecord(
     }
 }
 
-// Placeholder for Outreach Generation logic
+/**
+ * Generate an outreach message for a resume using the LLM.
+ * A job_description is always required per FR-070.
+ */
 export async function generateOutreach(
     resumeId: string,
     organizationId: string,
-    type: "LinkedIn" | "Email"
+    jobDescription: string,
+    outputLanguage = "en"
 ): Promise<ServerActionResult<OutreachRecord>> {
-    // In a real app, this would use LLM logic
-    // For now, we simulate a successful generation
-    return createOutreachRecord({
-        organizationId,
-        resumeId,
-        content: `Personalized ${type} outreach message based on resume ${resumeId}.`,
-    });
+    try {
+        const resumeResult = await getResumeById(resumeId, organizationId);
+        if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
+
+        const content = await generateOutreachMessage(
+            organizationId,
+            resumeResult.data.structuredData as Record<string, unknown>,
+            jobDescription,
+            outputLanguage
+        );
+
+        if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
+
+        return await createOutreachRecord({ organizationId, resumeId, content });
+    } catch (e) {
+        return { success: false, error: "OUTREACH_PROCESS_FAILED" };
+    }
+}
+
+/**
+ * Re-generate an outreach message in-place (same record ID).
+ * Falls back to the linked resume's stored job_description if no JD is provided.
+ */
+export async function regenerateOutreach(
+    outreachId: string,
+    organizationId: string,
+    jobDescription?: string
+): Promise<ServerActionResult<OutreachRecord>> {
+    try {
+        const existing = await prisma.outreach.findFirst({
+            where: { id: outreachId, organizationId },
+            select: { id: true, resumeId: true },
+        });
+        if (!existing) return { success: false, error: "NOT_FOUND" };
+
+        const resumeResult = await getResumeById(existing.resumeId, organizationId);
+        if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
+
+        const jd = jobDescription ?? resumeResult.data.jobDescription ?? null;
+        if (!jd) return { success: false, error: "NO_JOB_DESCRIPTION" };
+
+        const language = resumeResult.data.outputLanguage ?? "en";
+        const content = await generateOutreachMessage(
+            organizationId,
+            resumeResult.data.structuredData as Record<string, unknown>,
+            jd,
+            language
+        );
+
+        if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
+
+        return await updateOutreachRecord(outreachId, organizationId, content);
+    } catch (e) {
+        return { success: false, error: "REGENERATE_FAILED" };
+    }
 }

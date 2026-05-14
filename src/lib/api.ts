@@ -49,12 +49,15 @@ export type ApiErrorCode =
     | "PREVIEW_REQUIRED"
     | "HASH_MISMATCH"
     | "PERSONAL_INFO_CHANGED"
-    | "APPLY_CONFLICT";
+    | "APPLY_CONFLICT"
+    | "RATE_LIMITED";
 
 // ─── Auth helper for route handlers ──────────────────────────────────────────
 
-import { requireApiKey } from "@/lib/middleware";
+import { requireApiKey, requireRateLimit } from "@/lib/middleware";
 import type { NextRequest } from "next/server";
+import { getSubscriptionPlan } from "@/server/subscription";
+import { TailorStrategy } from "@prisma/client";
 
 /** One-liner auth check — returns ownerId or a ready-to-return error response. */
 export async function authenticate(
@@ -67,6 +70,14 @@ export async function authenticate(
             ownerId: null,
             errResponse: apiError(result.error || "UNAUTHORIZED", status),
         };
+    }
+    const plan = await getSubscriptionPlan(result.organizationId);
+    const rateLimit = await requireRateLimit(result.organizationId, plan);
+    if (!rateLimit.allowed) {
+        return {
+            ownerId: null,
+            errResponse: apiError("RATE_LIMITED", 429)
+        }
     }
     return { ownerId: result.organizationId, errResponse: null };
 }
@@ -94,85 +105,47 @@ export async function parseBody<T>(
 
 // ─── Reusable Zod schemas ─────────────────────────────────────────────────────
 
-export const ImprovePreviewSchema = z.object({
-    resume_id: z.string().min(1),
-    job_id: z.string().min(1),
-    prompt_id: z.enum(["nudge", "keywords", "full"]).optional(),
-});
-
-export const ImproveConfirmSchema = z.object({
-    resume_id: z.string().min(1),
-    job_id: z.string().min(1),
-    improved_data: z.record(z.string(), z.unknown()),
-    improvements: z.array(
-        z.object({ suggestion: z.string(), lineNumber: z.number().nullable().optional() })
-    ),
-});
-
-export const JobUploadSchema = z.object({
-    job_descriptions: z.array(z.string().min(1)).min(1, "At least one job description required"),
-    resume_id: z.string().optional().nullable(),
-});
-
 export const UpdateCoverLetterSchema = z.object({
     content: z.string().min(1),
-});
-
-export const UpdateTitleSchema = z.object({
-    title: z.string().min(1).max(80),
 });
 
 export const UpdateOutreachSchema = z.object({
     content: z.string().min(1),
 });
 
-export const EnhanceRequestSchema = z.object({
-    resume_id: z.string().min(1),
-    answers: z.array(
-        z.object({
-            question_id: z.string(),
-            answer: z.string(),
-            item_id: z.string().optional().nullable(),
-            question_text: z.string().optional().nullable(),
-        })
-    ).min(1),
-});
-
-export const RegenerateRequestSchema = z.object({
-    resume_id: z.string().min(1),
-    items: z.array(
-        z.object({
-            item_id: z.string(),
-            item_type: z.enum(["experience", "project", "skills"]),
-            title: z.string(),
-            subtitle: z.string().optional().nullable(),
-            current_content: z.array(z.string()),
-        })
-    ).min(1),
-    instruction: z.string().min(1).max(2000),
-    output_language: z.string().optional(),
-});
-
-export const ApplyEnhancementsSchema = z.object({
-    enhancements: z.array(
-        z.object({
-            item_id: z.string(),
-            item_type: z.string(),
-            title: z.string(),
-            original_description: z.array(z.string()),
-            enhanced_description: z.array(z.string()),
-        })
-    ),
-});
-
+// Snake_case schema that matches the incoming request body
 export const LlmConfigSchema = z.object({
     provider: z.string().optional(),
     model: z.string().optional(),
-    apiKey: z.string().optional(),
-    apiBase: z.string().nullable().optional(),
-    reasoningEffort: z.enum(["minimal", "low", "medium", "high", ""]).nullable().optional(),
-    enableCoverLetter: z.boolean().optional(),
-    enableOutreachMessage: z.boolean().optional(),
-    contentLanguage: z.string().optional(),
-    defaultPromptId: z.string().optional(),
-});
+    api_key: z.string().optional(),
+    api_base: z.string().nullable().optional(),
+    reasoning_effort: z.enum(["minimal", "low", "medium", "high", ""]).nullable().optional(),
+    enable_cover_letter: z.boolean().optional().default(false),
+    enable_outreach_message: z.boolean().optional().default(false),
+    content_language: z.string().optional().default("en"),
+    default_prompt_id: z.string().optional(),
+}).transform((data) => ({
+    provider: data.provider,
+    model: data.model,
+    apiKey: data.api_key,
+    apiBase: data.api_base,
+    reasoningEffort: data.reasoning_effort,
+    enableCoverLetter: data.enable_cover_letter,
+    enableOutreachMessage: data.enable_outreach_message,
+    contentLanguage: data.content_language,
+    defaultPromptId: data.default_prompt_id,
+}));
+
+export const tailorSchema = z.object({
+    job_description: z.string().min(50),
+    strategy: z.nativeEnum(TailorStrategy).optional(),
+    generate_cover_letter: z.boolean().optional().default(false),
+    generate_outreach: z.boolean().optional().default(false),
+    output_language: z.string().optional(),
+}).transform((data) => ({
+    jobDescription: data.job_description,
+    strategy: data.strategy,
+    generateCoverLetter: data.generate_cover_letter,
+    generateOutreach: data.generate_outreach,
+    outputLanguage: data.output_language,
+}));

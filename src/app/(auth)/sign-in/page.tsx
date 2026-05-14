@@ -7,7 +7,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Mail, Lock, ArrowRight, Loader2, ShieldCheck, Zap, Globe } from "lucide-react";
+import {
+    Mail,
+    Lock,
+    ArrowRight,
+    Loader2,
+    ScanSearch,
+    Wand2,
+    FileCheck2,
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { siteConfig } from "@/config/site";
@@ -23,25 +31,29 @@ import {
 import { Input } from "@/components/ui/input";
 
 const formSchema = z.object({
-    email: z.string().email("Please enter a valid email address"),
+    email: z.email("Please enter a valid email address"),
     password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
+// Features aligned to Refleum AI's resume-tailoring capabilities
 const features = [
     {
-        icon: ShieldCheck,
-        title: "Secure by Default",
-        description: "End-to-end encrypted sessions with industry-standard auth flows.",
+        icon: ScanSearch,
+        title: "Keyword-Matched Tailoring",
+        description:
+            "Every resume is aligned to the exact language of your target job description — no guesswork.",
     },
     {
-        icon: Zap,
-        title: "Instant Access",
-        description: "Pick up right where you left off — no friction, no delays.",
+        icon: Wand2,
+        title: "Multi-Pass AI Refinement",
+        description:
+            "Three automatic passes: keyword injection, AI phrase cleanup, and hallucination guard.",
     },
     {
-        icon: Globe,
-        title: "Available Everywhere",
-        description: "Access your account from any device, anywhere in the world.",
+        icon: FileCheck2,
+        title: "Cover Letters Included",
+        description:
+            "Grounded, job-specific cover letters generated alongside your tailored resume in seconds.",
     },
 ];
 
@@ -88,8 +100,9 @@ const LoginContent = () => {
 
     return (
         <div className="flex min-h-screen bg-background">
-            {/* Left panel — branding */}
+            {/* ── Left panel — Refleum AI branding ── */}
             <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 bg-foreground text-background overflow-hidden">
+                {/* Subtle grid texture */}
                 <div
                     className="absolute inset-0 opacity-[0.04]"
                     style={{
@@ -122,12 +135,13 @@ const LoginContent = () => {
                             Welcome back
                         </p>
                         <h1 className="text-4xl font-bold tracking-tight text-background leading-[1.15]">
-                            Good to see
+                            Your next role
                             <br />
-                            you again.
+                            starts here.
                         </h1>
                         <p className="text-base text-background/60 font-light max-w-xs leading-relaxed">
-                            Sign in to pick up where you left off and keep building.
+                            Sign in to access your tailored resumes, cover letters, and
+                            job-specific outreach — all grounded in your real experience.
                         </p>
                     </div>
 
@@ -138,8 +152,12 @@ const LoginContent = () => {
                                     <f.icon className="h-4 w-4 text-background/80" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-background">{f.title}</p>
-                                    <p className="text-xs text-background/50 font-light mt-0.5">{f.description}</p>
+                                    <p className="text-sm font-semibold text-background">
+                                        {f.title}
+                                    </p>
+                                    <p className="text-xs text-background/50 font-light mt-0.5">
+                                        {f.description}
+                                    </p>
                                 </div>
                             </div>
                         ))}
@@ -150,12 +168,12 @@ const LoginContent = () => {
                 <div className="relative z-10">
                     <div className="h-px bg-background/10 mb-6" />
                     <p className="text-xs text-background/30 font-light">
-                        Trusted by thousands of teams worldwide.
+                        No fabricated skills. No invented metrics. Just your story, better told.
                     </p>
                 </div>
             </div>
 
-            {/* Right panel — form */}
+            {/* ── Right panel — sign-in form ── */}
             <div className="flex w-full lg:w-1/2 flex-col items-center justify-center px-8 py-12">
                 {/* Mobile logo */}
                 <div className="lg:hidden mb-8 flex items-center gap-2.5">
@@ -168,13 +186,17 @@ const LoginContent = () => {
                             className="h-4 w-4 object-contain"
                         />
                     </div>
-                    <span className="font-semibold tracking-tight text-sm">{siteConfig.name}</span>
+                    <span className="font-semibold tracking-tight text-sm">
+                        {siteConfig.name}
+                    </span>
                 </div>
 
                 <div className="w-full max-w-sm space-y-8">
                     {/* Header */}
                     <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                            Welcome back
+                        </h2>
                         <p className="text-sm text-muted-foreground font-light">
                             Sign in to your account to continue.
                         </p>
@@ -182,7 +204,10 @@ const LoginContent = () => {
 
                     {/* Form */}
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                        <form
+                            onSubmit={form.handleSubmit(onSubmit)}
+                            className="space-y-5"
+                        >
                             <FormField
                                 control={form.control}
                                 name="email"
@@ -257,7 +282,7 @@ const LoginContent = () => {
                     <p className="text-center text-sm text-muted-foreground">
                         Don&apos;t have an account?{" "}
                         <Link
-                            href="/signup"
+                            href="/sign-up"
                             className="font-semibold text-foreground hover:underline underline-offset-4"
                         >
                             Create one free

@@ -218,7 +218,6 @@ model User {
   members          Member[]
   invitations      Invitation[]
   twofactors       TwoFactor[]
-  apikeys          Apikey[]
   resumes          Resume[]
   config           LlmConfig?
 
@@ -276,7 +275,7 @@ model Verification {
 }
 
 model Organization {
-  id            String         @id  @default(cuid())
+  id            String         @id @default(cuid())
   name          String
   slug          String
   logo          String?
@@ -306,6 +305,8 @@ model Member {
   role           String       @default("member")
   createdAt      DateTime
 
+  @@index([organizationId])
+  @@index([userId])
   @@map("member")
 }
 
@@ -320,6 +321,10 @@ model Invitation {
   inviterId      String
   user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([email])
   @@map("invitation")
 }
 
@@ -330,17 +335,21 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  verified Boolean? @default(true)
+
+  @@index([secret])
+  @@index([userId])
   @@map("twoFactor")
 }
 
 model Apikey {
   id                  String    @id
+  configId            String    @default("default")
   name                String?
   start               String?
+  referenceId         String
   prefix              String?
   key                 String
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   refillInterval      Int?
   refillAmount        Int?
   lastRefillAt        DateTime?
@@ -357,5 +366,8 @@ model Apikey {
   permissions         String?
   metadata            String?
 
+  @@index([configId])
+  @@index([referenceId])
+  @@index([key])
   @@map("apikey")
 }

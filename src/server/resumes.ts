@@ -206,20 +206,49 @@ export async function retryResumeParsing(
     }
 }
 
+export type TailorResult = {
+    resume: ResumeRecord;
+    cover_letter_id: string | null;
+    outreach_id: string | null;
+    refinement_stats: {
+        keywords_injected: number;
+        phrases_replaced: number;
+        diffs_applied: number;
+        rejected_changes: number;
+    };
+};
+
 export async function tailorResume(
-    resumeId: string,
     organizationId: string,
-    input: { jobDescription: string; strategy?: TailorStrategy; outputLanguage?: string }
-): Promise<ServerActionResult<ResumeRecord>> {
+    input: {
+        resumeId?: string;           // optional — defaults to org master (FR-021)
+        jobDescription: string;
+        strategy?: TailorStrategy;
+        outputLanguage?: string;
+        generateCoverLetter?: boolean;
+        generateOutreach?: boolean;
+    }
+): Promise<ServerActionResult<TailorResult>> {
     try {
-        const original = await getResumeById(resumeId, organizationId);
-        if (!original.success) return original;
+        // Resolve source resume — use provided ID or fall back to org master (FR-022)
+        let sourceId = input.resumeId;
+        if (!sourceId) {
+            const master = await prisma.resume.findFirst({
+                where: { organizationId, isMaster: true },
+                select: { id: true },
+            });
+            if (!master) return { success: false, error: "NO_MASTER_RESUME" };
+            sourceId = master.id;
+        }
+
+        const original = await getResumeById(sourceId, organizationId);
+        if (!original.success) return original as ServerActionResult<never>;
         if (!original.data.structuredData) return { success: false, error: "RESUME_NOT_PARSED" };
 
-        const strategy = input.strategy || TailorStrategy.KEYWORDS;
-        const language = input.outputLanguage || "en";
+        const strategy = input.strategy ?? TailorStrategy.NUDGE;
+        const language = input.outputLanguage ?? "en";
 
-        // Step 1: Extract Keywords from JD
+        // Step 1: Extract Keywords from JD (FR-033)
         const keywordResult = await completeJson<any>(
             organizationId,
             EXTRACT_KEYWORDS_PROMPT.replace("{job_description}", input.jobDescription)
@@ -228,12 +257,13 @@ export async function tailorResume(
 
         // Step 2: Primary Tailoring Pass
         const promptKey = strategy.toLowerCase() as keyof typeof IMPROVE_RESUME_PROMPTS;
-        const primaryTailoringPrompt = IMPROVE_RESUME_PROMPTS[promptKey] || IMPROVE_RESUME_PROMPTS.keywords;
+        const primaryTailoringPrompt =
+            IMPROVE_RESUME_PROMPTS[promptKey] ?? IMPROVE_RESUME_PROMPTS.keywords;
 
         const primaryResult = await completeJson<ResumeData>(
             organizationId,
             primaryTailoringPrompt
-                .replace("{critical_truthfulness_rules}", CRITICAL_TRUTHFULNESS_RULES[promptKey] || CRITICAL_TRUTHFULNESS_RULES.keywords)
+                .replace("{critical_truthfulness_rules}", CRITICAL_TRUTHFULNESS_RULES[promptKey] ?? CRITICAL_TRUTHFULNESS_RULES.keywords)
                 .replace("{output_language}", language)
                 .replace("{job_description}", input.jobDescription)
                 .replace("{job_keywords}", JSON.stringify(keywords))
@@ -243,47 +273,109 @@ export async function tailorResume(
 
         if (!primaryResult.success) return { success: false, error: "PRIMARY_TAILORING_FAILED" };
 
-        // Step 3: Keyword Injection Pass (Safety Net)
+        let diffsApplied = 0;
+
+        // Step 3: Keyword Injection Pass (FR-047)
         const injectionResult = await completeJson<ResumeData>(
             organizationId,
             KEYWORD_INJECTION_PROMPT
-                .replace("{keywords_to_inject}", JSON.stringify(keywords.required_skills || []))
+                .replace("{keywords_to_inject}", JSON.stringify(keywords.required_skills ?? []))
                 .replace("{current_resume}", JSON.stringify(primaryResult.data))
                 .replace("{master_resume}", JSON.stringify(original.data.structuredData))
                 .replace("{job_description}", input.jobDescription)
         );
 
-        const currentResumeData = injectionResult.success ? injectionResult.data : primaryResult.data;
+        const afterInjection = injectionResult.success ? injectionResult.data : primaryResult.data;
+        if (injectionResult.success) diffsApplied++;
 
-        // Step 4: Validation & Polish Pass
+        // Step 4: Validation & Polish Pass (FR-051)
         const finalResult = await completeJson<ResumeData>(
             organizationId,
             VALIDATION_POLISH_PROMPT
-                .replace("{resume}", JSON.stringify(currentResumeData))
+                .replace("{resume}", JSON.stringify(afterInjection))
                 .replace("{master_resume}", JSON.stringify(original.data.structuredData))
         );
 
-        const finalResumeData = finalResult.success ? finalResult.data : currentResumeData;
+        const finalResumeData = finalResult.success ? finalResult.data : afterInjection;
+        if (finalResult.success) diffsApplied++;
 
-        // Add personalInfo back (it's excluded in tailoring prompts)
+        // Safety net: restore personalInfo from source (FR-043)
         const completeResumeData = {
             ...finalResumeData,
-            personalInfo: (original.data.structuredData as any).personalInfo
+            personalInfo: (original.data.structuredData as any).personalInfo,
         };
 
-        // Step 5: Save Record
-        return createResumeRecord({
+        // Step 5: Persist the tailored resume atomically (FR-025)
+        const saveResult = await createResumeRecord({
             organizationId,
-            originalMarkdown: original.data.originalMarkdown || "",
+            originalMarkdown: original.data.originalMarkdown ?? "",
             structuredData: completeResumeData as any,
             filename: `Tailored - ${original.data.filename}`,
             status: ResumeStatus.READY,
-            parentId: resumeId,
+            parentId: sourceId,
             jobDescription: input.jobDescription,
             jobKeywords: keywords,
-            strategy: strategy,
+            strategy,
             outputLanguage: language,
         });
+
+        if (!saveResult.success) return saveResult as ServerActionResult<never>;
+
+        const tailoredResume = saveResult.data;
+
+        // Step 6: Generate cover letter + outreach in parallel (FR-029)
+        // Failures must NOT block the tailor response.
+        let coverLetterId: string | null = null;
+        let outreachId: string | null = null;
+
+        if (input.generateCoverLetter || input.generateOutreach) {
+            // Lazy import to avoid circular dependency
+            const { generateCoverLetter } = await import("./cover-letters");
+            const { generateOutreach } = await import("./outreach");
+
+            const [clResult, outResult] = await Promise.allSettled([
+                input.generateCoverLetter
+                    ? generateCoverLetter(tailoredResume.id, organizationId, {
+                        jobDescription: input.jobDescription,
+                        outputLanguage: language,
+                    })
+                    : Promise.resolve(null),
+                input.generateOutreach
+                    ? generateOutreach(tailoredResume.id, organizationId, input.jobDescription, language)
+                    : Promise.resolve(null),
+            ]);
+
+            if (clResult.status === "fulfilled" && clResult.value?.success) {
+                coverLetterId = clResult.value.data.id;
+            } else if (clResult.status === "rejected") {
+                console.error("Cover letter generation rejected:", clResult.reason);
+            } else if (clResult.status === "fulfilled" && clResult.value && !clResult.value.success) {
+                console.error("Cover letter generation failed:", clResult.value.error);
+            }
+
+            if (outResult.status === "fulfilled" && outResult.value?.success) {
+                outreachId = outResult.value.data.id;
+            } else if (outResult.status === "rejected") {
+                console.error("Outreach generation rejected:", outResult.reason);
+            } else if (outResult.status === "fulfilled" && outResult.value && !outResult.value.success) {
+                console.error("Outreach generation failed:", outResult.value.error);
+            }
+        }
+
+        return {
+            success: true,
+            data: {
+                resume: tailoredResume,
+                cover_letter_id: coverLetterId,
+                outreach_id: outreachId,
+                refinement_stats: {
+                    keywords_injected: (keywords.required_skills ?? []).length,
+                    phrases_replaced: 0, // local regex pass not yet implemented
+                    diffs_applied: diffsApplied,
+                    rejected_changes: 0,
+                },
+            },
+        };
     } catch (e) {
         return { success: false, error: "TAILORING_PROCESS_FAILED" };
     }

@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import { completeText } from "@/lib/llm";
-import { COVER_LETTER_PROMPT } from "@/lib/prompts/templates";
+import { generateCoverLetter as generateCoverLetterText } from "@/lib/cover-letter";
 import { getResumeById } from "./resumes";
 
 const coverLetterSelect = {
@@ -127,24 +126,56 @@ export async function generateCoverLetter(
         const resumeResult = await getResumeById(resumeId, organizationId);
         if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
 
-        const language = input.outputLanguage || "en";
-
-        const content = await completeText(
+        const language = input.outputLanguage ?? "en";
+        const content = await generateCoverLetterText(
             organizationId,
-            COVER_LETTER_PROMPT
-                .replace("{output_language}", language)
-                .replace("{job_description}", input.jobDescription)
-                .replace("{resume_data}", JSON.stringify(resumeResult.data.structuredData))
+            resumeResult.data.structuredData as Record<string, unknown>,
+            input.jobDescription,
+            language
         );
 
         if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await createCoverLetterRecord({
-            organizationId,
-            resumeId,
-            content,
-        });
+        return await createCoverLetterRecord({ organizationId, resumeId, content });
     } catch (e) {
         return { success: false, error: "COVER_LETTER_PROCESS_FAILED" };
+    }
+}
+
+/**
+ * Re-generate a cover letter in-place (same record ID).
+ * Falls back to the linked resume's stored job_description if no JD is provided.
+ */
+export async function regenerateCoverLetter(
+    coverLetterId: string,
+    organizationId: string,
+    jobDescription?: string
+): Promise<ServerActionResult<CoverLetterRecord>> {
+    try {
+        const existing = await prisma.coverLetter.findFirst({
+            where: { id: coverLetterId, organizationId },
+            select: { id: true, resumeId: true },
+        });
+        if (!existing) return { success: false, error: "NOT_FOUND" };
+
+        const resumeResult = await getResumeById(existing.resumeId, organizationId);
+        if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
+
+        const jd = jobDescription ?? resumeResult.data.jobDescription ?? null;
+        if (!jd) return { success: false, error: "NO_JOB_DESCRIPTION" };
+
+        const language = resumeResult.data.outputLanguage ?? "en";
+        const content = await generateCoverLetterText(
+            organizationId,
+            resumeResult.data.structuredData as Record<string, unknown>,
+            jd,
+            language
+        );
+
+        if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
+
+        return await updateCoverLetterRecord(coverLetterId, organizationId, content);
+    } catch (e) {
+        return { success: false, error: "REGENERATE_FAILED" };
     }
 }

@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { getRawLlmConfig } from "@/server/llm-config";
 import type { LlmProvider } from "@/types";
+import { decryptApiKey } from "./crypto";
 
 // ─── Config Resolution ────────────────────────────────────────────────────────
 
@@ -19,12 +20,16 @@ interface ResolvedConfig {
 
 async function resolveConfig(orgId: string): Promise<ResolvedConfig> {
     const stored = await getRawLlmConfig(orgId);
+
+    if (!stored) throw new Error("LLM_NOT_CONFIGURED: No LLM config found");
+    if (!stored.apiKey) throw new Error("LLM_NOT_CONFIGURED: API key is missing");
+
     return {
-        provider: (stored?.provider ?? process.env.DEFAULT_LLM_PROVIDER ?? "openai") as LlmProvider,
-        model: stored?.model ?? process.env.DEFAULT_LLM_MODEL ?? "gpt-4o",
-        apiKey: stored?.apiKey ?? process.env.OPENAI_API_KEY ?? "",
-        apiBase: stored?.apiBase ?? null,
-        reasoningEffort: stored?.reasoningEffort ?? null,
+        provider: stored.provider as LlmProvider,
+        model: stored.model,
+        apiKey: decryptApiKey(stored.apiKey), // decrypt here
+        apiBase: stored.apiBase ?? null,
+        reasoningEffort: stored.reasoningEffort ?? null,
     };
 }
 
@@ -120,10 +125,27 @@ export function extractJson(content: string, depth = 0): string {
 // ─── Provider Clients ─────────────────────────────────────────────────────────
 
 function makeOpenAIClient(config: ResolvedConfig): OpenAI {
-    return new OpenAI({
-        apiKey: config.apiKey || "sk-no-key",
+    const baseConfig: ConstructorParameters<typeof OpenAI>[0] = {
+        apiKey: config.apiKey || "ollama", // Ollama requires a non-empty string
         baseURL: config.apiBase ?? undefined,
-    });
+    };
+
+    // if (config.provider === "openrouter") {
+    //     baseConfig.defaultHeaders = {
+    //         "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "",
+    //         "X-Title": process.env.OPENROUTER_APP_NAME ?? "",
+    //     };
+    // }
+
+    if (config.provider === "ollama") {
+        baseConfig.baseURL ??= "http://localhost:11434/v1";
+    }
+
+    if (config.provider === "gemini") {
+        baseConfig.baseURL ??= "https://generativelanguage.googleapis.com/v1beta/openai/";
+    }
+
+    return new OpenAI(baseConfig);
 }
 
 function makeAnthropicClient(config: ResolvedConfig): Anthropic {
@@ -150,7 +172,13 @@ export async function completeText(
         temperature?: number;
     } = {}
 ): Promise<string> {
-    const config = await resolveConfig(orgId);
+    let config: ResolvedConfig;
+    try {
+        config = await resolveConfig(orgId);
+    } catch (error) {
+        console.error("Error resolving LLM config:", error);
+        throw error;
+    }
     const { systemPrompt, maxTokens = 4096, temperature = 0.7 } = options;
 
     if (config.provider === "anthropic") {
@@ -217,7 +245,13 @@ export async function completeJson<T = Record<string, any>>(
         retries?: number;
     } = {}
 ): Promise<LlmJsonResult<T>> {
-    const config = await resolveConfig(userId);
+    let config: ResolvedConfig;
+    try {
+        config = await resolveConfig(userId);
+    } catch (error) {
+        console.error("Error resolving LLM config:", error);
+        return { success: false, error: "No LLM config found" };
+    }
     const { maxTokens = 4096, retries = 2 } = options;
 
     const jsonSystemPrompt =
@@ -249,16 +283,15 @@ export async function completeJson<T = Record<string, any>>(
                 const extra: Record<string, unknown> = {};
                 if (config.reasoningEffort) extra["reasoning_effort"] = config.reasoningEffort;
 
+                const isReasoningModel = config.reasoningEffort != null;
+
                 const response = await client.chat.completions.create({
                     model: config.model,
                     messages,
                     max_tokens: maxTokens,
-                    temperature: getRetryTemperature(attempt),
-                    ...(supportsJsonMode(config.provider, config.model) && {
-                        response_format: { type: "json_object" },
-                    }),
-                    ...extra,
+                    ...(!isReasoningModel && { temperature: getRetryTemperature(attempt) }),
                 });
+
                 rawContent = response.choices[0]?.message?.content ?? "";
             }
 

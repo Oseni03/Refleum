@@ -7,7 +7,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { toast } from "sonner";
-import { User, Mail, Lock, Eye, EyeOff, Loader2, Sparkles, ShieldCheck, Zap } from "lucide-react";
+import {
+    User,
+    Mail,
+    Lock,
+    Eye,
+    EyeOff,
+    Loader2,
+    BrainCircuit,
+    ShieldCheck,
+    FileOutput,
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { siteConfig } from "@/config/site";
@@ -28,21 +38,25 @@ const formSchema = z.object({
     password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+// Features aligned to Refleum AI's resume-tailoring capabilities
 const features = [
     {
-        icon: Sparkles,
-        title: "Get Started in Minutes",
-        description: "Create your account and be up and running before your coffee gets cold.",
+        icon: BrainCircuit,
+        title: "AI That Stays Honest",
+        description:
+            "Refleum only rewrites what's already on your resume — never adds skills, employers, or metrics you don't have.",
     },
     {
         icon: ShieldCheck,
-        title: "Your Data, Protected",
-        description: "SOC 2 compliant infrastructure with end-to-end encrypted storage.",
+        title: "Alignment Validation Built In",
+        description:
+            "Every tailored version is checked against your master resume to catch and remove any fabricated content automatically.",
     },
     {
-        icon: Zap,
-        title: "Built for Scale",
-        description: "From side project to enterprise — the platform grows with you.",
+        icon: FileOutput,
+        title: "Resume, Cover Letter & Outreach",
+        description:
+            "One click produces a tailored resume, a job-specific cover letter, and a cold outreach message — ready to send.",
     },
 ];
 
@@ -90,8 +104,9 @@ const SignupContent = () => {
 
     return (
         <div className="flex min-h-screen bg-background">
-            {/* Left panel — branding */}
+            {/* ── Left panel — Refleum AI branding ── */}
             <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 bg-foreground text-background overflow-hidden">
+                {/* Subtle grid texture */}
                 <div
                     className="absolute inset-0 opacity-[0.04]"
                     style={{
@@ -121,17 +136,16 @@ const SignupContent = () => {
                 <div className="relative z-10 space-y-8">
                     <div className="space-y-3">
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-background/40">
-                            Create your account
+                            Get started free
                         </p>
                         <h1 className="text-4xl font-bold tracking-tight text-background leading-[1.15]">
-                            Start building
+                            Tailor your resume.
                             <br />
-                            something
-                            <br />
-                            great.
+                            Land the role.
                         </h1>
                         <p className="text-base text-background/60 font-light max-w-xs leading-relaxed">
-                            Join thousands of teams already using {siteConfig.name} to ship faster.
+                            Upload your master resume once. Let Refleum AI do the rest — keyword-matched,
+                            honest, and ready to send.
                         </p>
                     </div>
 
@@ -142,8 +156,12 @@ const SignupContent = () => {
                                     <f.icon className="h-4 w-4 text-background/80" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-background">{f.title}</p>
-                                    <p className="text-xs text-background/50 font-light mt-0.5">{f.description}</p>
+                                    <p className="text-sm font-semibold text-background">
+                                        {f.title}
+                                    </p>
+                                    <p className="text-xs text-background/50 font-light mt-0.5">
+                                        {f.description}
+                                    </p>
                                 </div>
                             </div>
                         ))}
@@ -159,7 +177,7 @@ const SignupContent = () => {
                 </div>
             </div>
 
-            {/* Right panel — form */}
+            {/* ── Right panel — sign-up form ── */}
             <div className="flex w-full lg:w-1/2 flex-col items-center justify-center px-8 py-12">
                 {/* Mobile logo */}
                 <div className="lg:hidden mb-8 flex items-center gap-2.5">
@@ -172,13 +190,17 @@ const SignupContent = () => {
                             className="h-4 w-4 object-contain"
                         />
                     </div>
-                    <span className="font-semibold tracking-tight text-sm">{siteConfig.name}</span>
+                    <span className="font-semibold tracking-tight text-sm">
+                        {siteConfig.name}
+                    </span>
                 </div>
 
                 <div className="w-full max-w-sm space-y-8">
                     {/* Header */}
                     <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">Create an account</h2>
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                            Create an account
+                        </h2>
                         <p className="text-sm text-muted-foreground font-light">
                             Get started for free — no credit card needed.
                         </p>
@@ -186,7 +208,10 @@ const SignupContent = () => {
 
                     {/* Form */}
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                        <form
+                            onSubmit={form.handleSubmit(onSubmit)}
+                            className="space-y-5"
+                        >
                             <FormField
                                 control={form.control}
                                 name="name"
@@ -255,7 +280,11 @@ const SignupContent = () => {
                                                     onClick={() => setShowPassword(!showPassword)}
                                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
                                                 >
-                                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                    {showPassword ? (
+                                                        <EyeOff className="h-4 w-4" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4" />
+                                                    )}
                                                 </button>
                                             </div>
                                         </FormControl>
@@ -272,7 +301,9 @@ const SignupContent = () => {
                                 disabled={isLoading}
                                 className="w-full h-11 font-semibold tracking-tight"
                             >
-                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {isLoading && (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                )}
                                 {isLoading ? "Creating account…" : "Create Account"}
                             </Button>
                         </form>
@@ -283,7 +314,7 @@ const SignupContent = () => {
                         <p className="text-center text-sm text-muted-foreground">
                             Already have an account?{" "}
                             <Link
-                                href="/login"
+                                href="/sign-in"
                                 className="font-semibold text-foreground hover:underline underline-offset-4"
                             >
                                 Sign in

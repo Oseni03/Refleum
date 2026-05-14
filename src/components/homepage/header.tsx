@@ -67,7 +67,7 @@ function Header() {
                                     asChild
                                     className={navigationMenuTriggerStyle()}
                                 >
-                                    <Link href="/">Platform</Link>
+                                    <Link href="/#features">Features</Link>
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>
@@ -75,7 +75,15 @@ function Header() {
                                     asChild
                                     className={navigationMenuTriggerStyle()}
                                 >
-                                    <Link href="/careers">Careers</Link>
+                                    <Link href="/#pricing">Pricing</Link>
+                                </NavigationMenuLink>
+                            </NavigationMenuItem>
+                            <NavigationMenuItem>
+                                <NavigationMenuLink
+                                    asChild
+                                    className={navigationMenuTriggerStyle()}
+                                >
+                                    <Link href="/docs">Docs</Link>
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                         </NavigationMenuList>
@@ -111,7 +119,7 @@ function Header() {
                             </Link>
                             <Link
                                 className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-                                href="/signup"
+                                href="/sign-up"
                             >
                                 Sign up
                             </Link>
