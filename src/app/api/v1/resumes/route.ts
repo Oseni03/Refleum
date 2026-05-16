@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { recordUsage } from "@/server/subscription";
-import { listResumes, createResumeRecord } from "@/server/resumes";
-import { parseResume, isAllowedMimeType, MAX_FILE_SIZE_BYTES } from "@/lib/parser";
+import { listResumes, createResumeRecord, updateResumeRecord } from "@/server/resumes";
+import { extractTextFromDocument, parseResumeToJson, isAllowedMimeType, MAX_FILE_SIZE_BYTES } from "@/lib/parser";
 import { ResumeStatus } from "@prisma/client";
 import { authenticate } from "@/lib/api";
 
@@ -37,7 +37,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // FR-001 — size gate (4 MB)
         if (file.size > MAX_FILE_SIZE_BYTES) {
             return NextResponse.json(
                 { error: "VALIDATION_ERROR", detail: "File exceeds 4 MB limit" },
@@ -45,7 +44,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // FR-001 — MIME type gate
         if (!isAllowedMimeType(file.type)) {
             return NextResponse.json(
                 { error: "VALIDATION_ERROR", detail: "Only PDF and DOCX files are accepted" },
@@ -53,42 +51,31 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // FR-005 — set_as_master flag
         const setAsMaster = formData.get("set_as_master");
         const explicitMaster =
             setAsMaster === "true" ? true :
                 setAsMaster === "false" ? false :
-                    undefined; // undefined → auto-designate per FR-005
+                    undefined;
 
         const buffer = Buffer.from(await file.arrayBuffer());
 
-        // FR-002/FR-003 — convert to Markdown + LLM parse
-        const parseResult = await parseResume(organizationId, buffer, file.name);
+        // Phase 1: Fast Text Extraction (Synchronous)
+        const extractResult = await extractTextFromDocument(buffer, file.name);
 
-        let status: ResumeStatus;
-        let structuredData: Record<string, unknown>;
-        let originalMarkdown: string;
-
-        if (parseResult.success) {
-            status = ResumeStatus.READY;
-            structuredData = parseResult.data.structuredData || {};
-            originalMarkdown = parseResult.data.originalMarkdown;
-        } else {
-            // FR-004 — persist as failed; resume_id is still returned
-            status = ResumeStatus.FAILED;
-            structuredData = {};
-            // For a failed parse, we still need the markdown if possible
-            // parseResume fails before markdown when the document is unreadable
-            originalMarkdown = "";
+        if (!extractResult.success) {
+            return NextResponse.json({ error: extractResult.error }, { status: 422 });
         }
 
-        // FR-008 — originalMarkdown is immutable; set once here
+        const { markdown, html } = extractResult.data;
+
+        // Create record as PROCESSING
         const saveResult = await createResumeRecord({
             organizationId,
-            originalMarkdown,
-            structuredData: structuredData as any,
+            markdown,
+            html,
+            structuredData: {},
             filename: file.name,
-            status,
+            status: ResumeStatus.PROCESSING,
             isMaster: explicitMaster,
         });
 
@@ -96,17 +83,34 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: saveResult.error }, { status: 500 });
         }
 
-        // Record usage for metering
-        await recordUsage(organizationId, "parse", saveResult.data.id);
+        const resume = saveResult.data;
 
-        // FR-009 — response shape
+        // Phase 2: Heavy LLM Parsing (Asynchronous)
+        after(async () => {
+            try {
+                const structuredData = await parseResumeToJson(organizationId, markdown);
+                await updateResumeRecord(resume.id, organizationId, {
+                    structuredData: structuredData as any,
+                    status: ResumeStatus.READY,
+                });
+
+                // Record usage only after successful parse
+                await recordUsage(organizationId, "parse", resume.id);
+            } catch (err: any) {
+                console.error(`Background parse failed for ${resume.id}:`, err);
+                await updateResumeRecord(resume.id, organizationId, {
+                    status: ResumeStatus.FAILED,
+                });
+            }
+        });
+
         return NextResponse.json(
             {
                 data: {
-                    resume_id: saveResult.data.id,
-                    is_master: saveResult.data.isMaster,
-                    status: saveResult.data.status,
-                    filename: saveResult.data.filename,
+                    resume_id: resume.id,
+                    is_master: resume.isMaster,
+                    status: resume.status,
+                    filename: resume.filename,
                 },
             },
             { status: 201 }

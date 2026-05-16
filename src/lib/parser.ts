@@ -1,110 +1,13 @@
-import { PDFParse } from "pdf-parse";
 import { completeJson } from "@/lib/llm";
 import { PARSE_RESUME_PROMPT, RESUME_SCHEMA_EXAMPLE } from "@/lib/prompts/templates";
 import { restoreDatesFromMarkdown } from "@/lib/resume-utils";
 import { convertToMarkdown } from "@cognipeer/to-markdown";
-
-import * as pdfjs from "pdfjs-dist";
-
-async function pdfToHtml(pdfBuffer: Buffer): Promise<string> {
-    const pdf = await pdfjs.getDocument({ data: pdfBuffer }).promise;
-
-    let bodyHtml = "";
-    const globalStyles = new Map<string, any>();
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent({ includeMarkedContent: true });
-        const viewport = page.getViewport({ scale: 1 });
-
-        // Collect styles
-        for (const [name, style] of Object.entries(content.styles as any)) {
-            globalStyles.set(name, style);
-        }
-
-        const pageItems = content.items
-            .filter((item): item is any => "str" in item && item.str.trim().length > 0)
-            .map((item) => {
-                const style = globalStyles.get(item.fontName) as any;
-                const fontSize = Math.round(item.height);
-                const isBold = style?.fontFamily?.toLowerCase().includes("bold");
-                const isItalic = style?.fontFamily?.toLowerCase().includes("italic");
-
-                // Normalize Y position (pdfjs Y is bottom-up)
-                const top = viewport.height - item.transform[5];
-                const left = item.transform[4];
-
-                return { str: item.str, fontSize, isBold, isItalic, top, left, width: item.width };
-            })
-            .sort((a, b) => a.top - b.top || a.left - b.left);
-
-        // Group items into lines by proximity
-        const lines: typeof pageItems[] = [];
-        for (const item of pageItems) {
-            const lastLine = lines[lines.length - 1];
-            if (lastLine && Math.abs(item.top - lastLine[0].top) < 5) {
-                lastLine.push(item);
-            } else {
-                lines.push([item]);
-            }
-        }
-
-        bodyHtml += `<div class="page">`;
-        for (const line of lines) {
-            const { fontSize, isBold, isItalic } = line[0];
-            const text = line.map(item => item.str).join(" ");
-
-            // Map font size to semantic tags
-            let tag = "p";
-            if (fontSize >= 20) tag = "h1";
-            else if (fontSize >= 16) tag = "h2";
-            else if (fontSize >= 13) tag = "h3";
-
-            const styleAttr = [
-                fontSize && tag === "p" ? `font-size: ${fontSize}px` : "",
-                isBold ? "font-weight: 700" : "",
-                isItalic ? "font-style: italic" : "",
-            ].filter(Boolean).join("; ");
-
-            bodyHtml += `<${tag}${styleAttr ? ` style="${styleAttr}"` : ""}>${text}</${tag}>\n`;
-        }
-        bodyHtml += `</div>`;
-
-        // Page break between pages
-        if (i < pdf.numPages) bodyHtml += `<div class="page-break"></div>`;
-    }
-
-    return `<!DOCTYPE html>
-<html>
-<head>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; color: #1a1a1a; line-height: 1.6; }
-        .page { padding: 40px; max-width: 800px; margin: 0 auto; }
-        h1 { font-size: 22px; font-weight: 700; padding-bottom: 8px; border-bottom: 2px solid #1a1a1a; margin-bottom: 16px; }
-        h2 { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin: 20px 0 8px; }
-        h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-        p  { font-size: 14px; margin-bottom: 8px; }
-        .page-break { page-break-after: always; }
-    </style>
-</head>
-<body>
-${bodyHtml}
-</body>
-</html>`;
-}
+import { marked } from "marked";
 
 // ─── PDF to Markdown ──────────────────────────────────────────────────────────
 
 async function pdfToMarkdown(buffer: Buffer): Promise<string> {
     try {
-        // const data = new PDFParse({ data: buffer });
-        // // pdf-parse gives us plain text — convert line breaks for markdown readability
-        // return (await data.getText()).text
-        //     .replace(/\r\n/g, "\n")
-        //     .replace(/\n{3,}/g, "\n\n")
-        //     .trim();
         const result = await convertToMarkdown(buffer);
         return result.trim();
     } catch (err) {
@@ -117,8 +20,6 @@ async function pdfToMarkdown(buffer: Buffer): Promise<string> {
 // ─── DOCX to Markdown ─────────────────────────────────────────────────────────
 
 async function docxToMarkdown(buffer: Buffer): Promise<string> {
-    // mammoth.convertToMarkdown produces cleaner structure than plain text
-    // const result = await mammoth.convertToMarkdown({ buffer });
     const result = await convertToMarkdown(buffer);
     return result.trim();
 }
@@ -148,6 +49,27 @@ export async function parseToMarkdown(
     );
 }
 
+function wrapHtml(body: string): string {
+    return `<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; color: #1a1a1a; line-height: 1.6; }
+        .page { padding: 40px; max-width: 800px; margin: 0 auto; }
+        h1 { font-size: 22px; font-weight: 700; padding-bottom: 8px; border-bottom: 2px solid #1a1a1a; margin-bottom: 16px; }
+        h2 { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin: 20px 0 8px; }
+        h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+        p  { font-size: 14px; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="page">${body}</div>
+</body>
+</html>`;
+}
+
 // ─── Full Resume Parsing (Document → Markdown → JSON) ────────────────────────
 
 /**
@@ -156,6 +78,29 @@ export async function parseToMarkdown(
  * 2. Uses LLM to extract structured JSON from the Markdown.
  * 3. Patches dates and returns both formats.
  */
+export async function extractTextFromDocument(
+    buffer: Buffer,
+    filename: string
+): Promise<{ success: true; data: { markdown: string; html: string } } | { success: false; error: string }> {
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+
+    try {
+        let markdown: string;
+        if (ext === "pdf") {
+            markdown = await pdfToMarkdown(buffer);
+        } else if (ext === "doc" || ext === "docx") {
+            markdown = await docxToMarkdown(buffer);
+        } else {
+            return { success: false, error: `Unsupported file type: .${ext}. Only PDF and DOCX are supported.` };
+        }
+        const html = wrapHtml(await marked(markdown));
+        return { success: true, data: { markdown, html } };
+    } catch (err: any) {
+        console.error("Document parsing failed:", err);
+        return { success: false, error: err.message || "DOCUMENT_PARSING_FAILED" };
+    }
+}
+
 export async function parseResume(
     orgId: string,
     buffer: Buffer,
@@ -163,7 +108,8 @@ export async function parseResume(
 ): Promise<{
     success: true;
     data: {
-        originalMarkdown: string;
+        markdown: string;
+        html: string;
         structuredData: Record<string, unknown> | null;
         structuredDataError?: string;
     }
@@ -171,25 +117,23 @@ export async function parseResume(
     success: false;
     error: string
 }> {
-    let markdown: string;
-
-    try {
-        markdown = await parseToMarkdown(buffer, filename);
-    } catch (err: any) {
-        console.error("Document parsing failed:", err);
-        return { success: false, error: err.message || "DOCUMENT_PARSING_FAILED" };
+    const extractResult = await extractTextFromDocument(buffer, filename);
+    if (!extractResult.success) {
+        return { success: false, error: extractResult.error };
     }
 
-    // Markdown is available — structured parsing failure is non-fatal
+    const { markdown, html } = extractResult.data;
+
     try {
-        const structuredData = await parseResumeToJson(orgId, markdown);
-        return { success: true, data: { originalMarkdown: markdown, structuredData } };
+        const structuredData = await parseResumeToJson(orgId, markdown);  // always use markdown for LLM
+        return { success: true, data: { markdown, html, structuredData } };
     } catch (err: any) {
         console.error("Structured data parsing failed:", err);
         return {
             success: true,
             data: {
-                originalMarkdown: markdown,
+                markdown,
+                html,
                 structuredData: null,
                 structuredDataError: err.message || "STRUCTURED_PARSING_FAILED",
             },

@@ -64,6 +64,8 @@ export const RESUME_SCHEMA_EXAMPLE = `{
         "Built CLI tool with 1000+ GitHub stars",
         "Used by 50+ companies worldwide"
       ]
+      "github":"https://github.com/johndoe",
+      "website":"https://johndoe.dev",
     }
   ],
   "additional": {

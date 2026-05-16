@@ -21,7 +21,8 @@ const resumeSelect = {
     parentId: true,
     status: true,
     filename: true,
-    originalMarkdown: true,
+    markdown: true,
+    html: true,
     structuredData: true,
     jobDescription: true,
     jobKeywords: true,
@@ -32,7 +33,24 @@ const resumeSelect = {
     updatedAt: true,
 } as const;
 
+export const resumeListSelect = {
+    id: true,
+    organizationId: true,
+    isMaster: true,
+    parentId: true,
+    status: true,
+    filename: true,
+    jobDescription: true,
+    jobKeywords: true,
+    strategy: true,
+    title: true,
+    outputLanguage: true,
+    createdAt: true,
+    updatedAt: true,
+} as const;
+
 export type ResumeRecord = Prisma.ResumeGetPayload<{ select: typeof resumeSelect }>;
+export type ResumeListRecord = Prisma.ResumeGetPayload<{ select: typeof resumeListSelect }>;
 
 export type ServerActionResult<T> =
     | { success: true; data: T }
@@ -58,14 +76,14 @@ export async function listResumes(
     organizationId: string,
     includeMaster = false,
     params: { limit: number; offset: number } = { limit: 10, offset: 0 }
-): Promise<ServerActionResult<ResumeRecord[]>> {
+): Promise<ServerActionResult<ResumeListRecord[]>> {
     try {
         const resumes = await prisma.resume.findMany({
             where: {
                 organizationId,
                 ...(includeMaster ? {} : { isMaster: false }),
             },
-            select: resumeSelect,
+            select: resumeListSelect,
             orderBy: { updatedAt: "desc" },
             take: params.limit,
             skip: params.offset,
@@ -78,7 +96,8 @@ export async function listResumes(
 
 export async function createResumeRecord(input: {
     organizationId: string;
-    originalMarkdown: string;
+    markdown: string;
+    html: string;
     structuredData: Prisma.InputJsonValue;
     filename: string;
     status: ResumeStatus;
@@ -181,7 +200,7 @@ export async function retryResumeParsing(
     const resume = await getResumeById(resumeId, organizationId);
     if (!resume.success) return resume;
 
-    if (!resume.data.originalMarkdown) {
+    if (!resume.data.markdown) {
         return { success: false, error: "MISSING_SOURCE_TEXT" };
     }
 
@@ -190,12 +209,12 @@ export async function retryResumeParsing(
             organizationId,
             PARSE_RESUME_PROMPT
                 .replace("{schema}", RESUME_SCHEMA_EXAMPLE)
-                .replace("{resume_text}", resume.data.originalMarkdown)
+                .replace("{resume_text}", resume.data.markdown)
         );
 
         if (!parsedResult.success) return { success: false, error: "LLM_PARSING_FAILED" };
 
-        const restored = restoreDatesFromMarkdown(parsedResult.data as Record<string, any>, resume.data.originalMarkdown);
+        const restored = restoreDatesFromMarkdown(parsedResult.data as Record<string, any>, resume.data.markdown);
 
         return await updateResumeRecord(resumeId, organizationId, {
             structuredData: restored as any,
@@ -231,18 +250,21 @@ export async function tailorResume(
 ): Promise<ServerActionResult<TailorResult>> {
     try {
         // Resolve source resume — use provided ID or fall back to org master (FR-022)
-        let sourceId = input.resumeId;
-        if (!sourceId) {
-            const master = await prisma.resume.findFirst({
-                where: { organizationId, isMaster: true },
-                select: { id: true },
-            });
-            if (!master) return { success: false, error: "NO_MASTER_RESUME" };
-            sourceId = master.id;
+        const originalRecord = await prisma.resume.findFirst({
+            where: {
+                organizationId,
+                ...(input.resumeId ? { id: input.resumeId } : { isMaster: true }),
+            },
+            select: resumeSelect,
+        });
+
+        if (!originalRecord) {
+            return { success: false, error: input.resumeId ? "NOT_FOUND" : "NO_MASTER_RESUME" };
         }
 
-        const original = await getResumeById(sourceId, organizationId);
-        if (!original.success) return original as ServerActionResult<never>;
+        const sourceId = originalRecord.id;
+        const original = { success: true, data: originalRecord } as const;
+
         if (!original.data.structuredData) return { success: false, error: "RESUME_NOT_PARSED" };
 
         const strategy = input.strategy ?? TailorStrategy.NUDGE;
@@ -308,7 +330,8 @@ export async function tailorResume(
         // Step 5: Persist the tailored resume atomically (FR-025)
         const saveResult = await createResumeRecord({
             organizationId,
-            originalMarkdown: original.data.originalMarkdown ?? "",
+            markdown: original.data.markdown ?? "",
+            html: original.data.html ?? "",
             structuredData: completeResumeData as any,
             filename: `Tailored - ${original.data.filename}`,
             status: ResumeStatus.READY,
@@ -323,42 +346,29 @@ export async function tailorResume(
 
         const tailoredResume = saveResult.data;
 
-        // Step 6: Generate cover letter + outreach in parallel (FR-029)
-        // Failures must NOT block the tailor response.
+        // Step 6: Create empty cover letter + outreach records synchronously (FR-029)
+        // Actual generation will be triggered in the background via Next.js after().
         let coverLetterId: string | null = null;
         let outreachId: string | null = null;
 
         if (input.generateCoverLetter || input.generateOutreach) {
-            // Lazy import to avoid circular dependency
-            const { generateCoverLetter } = await import("./cover-letters");
-            const { generateOutreach } = await import("./outreach");
+            const { createCoverLetterRecord } = await import("./cover-letters");
+            const { createOutreachRecord } = await import("./outreach");
 
-            const [clResult, outResult] = await Promise.allSettled([
-                input.generateCoverLetter
-                    ? generateCoverLetter(tailoredResume.id, organizationId, {
-                        jobDescription: input.jobDescription,
-                        outputLanguage: language,
-                    })
-                    : Promise.resolve(null),
-                input.generateOutreach
-                    ? generateOutreach(tailoredResume.id, organizationId, input.jobDescription, language)
-                    : Promise.resolve(null),
-            ]);
-
-            if (clResult.status === "fulfilled" && clResult.value?.success) {
-                coverLetterId = clResult.value.data.id;
-            } else if (clResult.status === "rejected") {
-                console.error("Cover letter generation rejected:", clResult.reason);
-            } else if (clResult.status === "fulfilled" && clResult.value && !clResult.value.success) {
-                console.error("Cover letter generation failed:", clResult.value.error);
+            if (input.generateCoverLetter) {
+                const clResult = await createCoverLetterRecord({
+                    organizationId,
+                    resumeId: tailoredResume.id,
+                });
+                if (clResult.success) coverLetterId = clResult.data.id;
             }
 
-            if (outResult.status === "fulfilled" && outResult.value?.success) {
-                outreachId = outResult.value.data.id;
-            } else if (outResult.status === "rejected") {
-                console.error("Outreach generation rejected:", outResult.reason);
-            } else if (outResult.status === "fulfilled" && outResult.value && !outResult.value.success) {
-                console.error("Outreach generation failed:", outResult.value.error);
+            if (input.generateOutreach) {
+                const outResult = await createOutreachRecord({
+                    organizationId,
+                    resumeId: tailoredResume.id,
+                });
+                if (outResult.success) outreachId = outResult.data.id;
             }
         }
 
