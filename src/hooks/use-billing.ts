@@ -49,6 +49,52 @@ export function useBilling() {
         }
     }, [activeOrganization, isAdmin, subscription, openPortal, subscribe, productIds]);
 
+    const handleUpgradePlan = useCallback(async () => {
+        if (!activeOrganization) {
+            toast.error("No active organization selected");
+            return;
+        }
+        if (!isAdmin) {
+            toast.error("Administrator permissions required");
+            return;
+        }
+
+        try {
+            toast.loading("Preparing checkout...");
+            await subscribe(activeOrganization.id, productIds);
+        } catch {
+            toast.dismiss();
+            toast.error("Failed to prepare checkout. Please try again.");
+        } finally {
+            toast.dismiss();
+        }
+    }, [activeOrganization, isAdmin, openPortal, subscribe, productIds]);
+
+    const handleCancelSubscription = useCallback(async () => {
+        if (!activeOrganization) {
+            toast.error("No active organization selected");
+            return;
+        }
+        if (!isAdmin) {
+            toast.error("Administrator permissions required");
+            return;
+        }
+        if (!subscription) {
+            toast.error("No active subscription to cancel");
+            return;
+        }
+
+        try {
+            toast.loading("Opening customer portal...");
+            await openPortal();
+        } catch {
+            toast.dismiss();
+            toast.error("Failed to open billing portal. Please try again.");
+        } finally {
+            toast.dismiss();
+        }
+    }, [activeOrganization, isAdmin, subscription, openPortal]);
+
     const plan = subscription?.plan || Plan.FREE;
 
     return {
@@ -59,5 +105,7 @@ export function useBilling() {
         error,
         plan,
         handleSubscriptionAction,
+        handleUpgradePlan,
+        handleCancelSubscription,
     };
 }
