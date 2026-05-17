@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, ResumeStatus } from "@prisma/client";
 import { generateCoverLetter as generateCoverLetterText } from "@/lib/cover-letter";
 import { getResumeById } from "./resumes";
 
@@ -59,14 +59,14 @@ export async function listCoverLetters(
 export async function createCoverLetterRecord(input: {
     organizationId: string;
     resumeId: string;
-    content: string;
+    content?: string;
 }): Promise<ServerActionResult<CoverLetterRecord>> {
     try {
         const result = await prisma.coverLetter.create({
             data: {
                 organizationId: input.organizationId,
                 resumeId: input.resumeId,
-                content: input.content,
+                ...(input.content !== undefined ? { content: input.content } : {}),
             },
             select: coverLetterSelect,
         });
@@ -79,7 +79,7 @@ export async function createCoverLetterRecord(input: {
 export async function updateCoverLetterRecord(
     coverLetterId: string,
     organizationId: string,
-    content: string
+    updates: Partial<{ content: string; status: ResumeStatus }>
 ): Promise<ServerActionResult<CoverLetterRecord>> {
     try {
         const existing = await prisma.coverLetter.findFirst({
@@ -90,7 +90,7 @@ export async function updateCoverLetterRecord(
 
         const result = await prisma.coverLetter.update({
             where: { id: coverLetterId },
-            data: { content },
+            data: updates,
             select: coverLetterSelect,
         });
         return { success: true, data: result };
@@ -174,7 +174,10 @@ export async function regenerateCoverLetter(
 
         if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await updateCoverLetterRecord(coverLetterId, organizationId, content);
+        return await updateCoverLetterRecord(coverLetterId, organizationId, { 
+            content, 
+            status: "READY" // Explicitly set to READY after background generation
+        });
     } catch (e) {
         return { success: false, error: "REGENERATE_FAILED" };
     }

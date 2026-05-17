@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { requirePlan } from "@/lib/middleware";
 import { tailorResume } from "@/server/resumes";
 import { TailorStrategy } from "@prisma/client";
@@ -15,42 +15,24 @@ export async function POST(
     if (errResponse) return errResponse;
 
     // Plan gate check for tailoring
-    const { allowed, error: planError } = await requirePlan(organizationId, "STARTER"); // Tailoring requires PRO plan in PRD
+    const { allowed, error: planError } = await requirePlan(organizationId, "STARTER");
     if (!allowed) return NextResponse.json({ error: planError }, { status: 403 });
 
     try {
         const { data: body, errResponse: bodyErr } = await parseBody(req, tailorSchema);
         if (bodyErr) return bodyErr;
 
-        // FR-032 — record usage regardless of pipeline success
-        const usagePromise = recordUsage(organizationId, "tailor", id).catch(() => { });
-
-        // FR-031 — 240s hard timeout
-        const timeoutMs = 240_000;
-        const timeoutPromise = new Promise<null>((resolve) =>
-            setTimeout(() => resolve(null), timeoutMs)
-        );
-
-        const tailorPromise = tailorResume(organizationId, {
-            resumeId: id, jobDescription: body.jobDescription,
+        // Tailoring itself still runs in-request for now as it produces the new resume record
+        const result = await tailorResume(organizationId, {
+            resumeId: id,
+            jobDescription: body.jobDescription,
             strategy: body.strategy?.toUpperCase() as TailorStrategy,
             outputLanguage: body.outputLanguage?.toLowerCase(),
             generateCoverLetter: body.generateCoverLetter,
             generateOutreach: body.generateOutreach,
         });
 
-        const [result] = await Promise.all([
-            Promise.race([tailorPromise, timeoutPromise]),
-            usagePromise,
-        ]);
-
-        // Timed out
-        if (!result) {
-            return NextResponse.json({ error: "TIMEOUT" }, { status: 504 });
-        }
-
         if (!result.success) {
-            // FR-022 — no master resume found
             if (result.error === "NO_MASTER_RESUME") {
                 return NextResponse.json(
                     { error: "VALIDATION_ERROR", detail: "No master resume found. Provide resume_id or upload a master resume." },
@@ -60,19 +42,47 @@ export async function POST(
             return NextResponse.json({ error: result.error }, { status: 500 });
         }
 
+        const data = result.data;
+
+        // Phase 2: Background Generation of Cover Letter & Outreach
+        after(async () => {
+            try {
+                // Record usage for the tailoring operation
+                await recordUsage(organizationId, "tailor", id);
+
+                if (data.cover_letter_id) {
+                    const { regenerateCoverLetter, updateCoverLetterRecord } = await import("@/server/cover-letters");
+                    const clResult = await regenerateCoverLetter(data.cover_letter_id, organizationId, body.jobDescription);
+                    if (!clResult.success) {
+                        await updateCoverLetterRecord(data.cover_letter_id, organizationId, { status: "FAILED" });
+                    }
+                }
+
+                if (data.outreach_id) {
+                    const { regenerateOutreach, updateOutreachRecord } = await import("@/server/outreach");
+                    const outResult = await regenerateOutreach(data.outreach_id, organizationId, body.jobDescription);
+                    if (!outResult.success) {
+                        await updateOutreachRecord(data.outreach_id, organizationId, { status: "FAILED" });
+                    }
+                }
+            } catch (err) {
+                console.error("Background tailoring tasks failed:", err);
+            }
+        });
+
         return NextResponse.json(
             {
                 data: {
-                    resume_id: result.data.resume.id,
-                    is_master: result.data.resume.isMaster,
-                    status: result.data.resume.status,
-                    filename: result.data.resume.filename,
-                    strategy: result.data.resume.strategy,
-                    job_keywords: result.data.resume.jobKeywords,
-                    parent_id: result.data.resume.parentId,
-                    cover_letter_id: result.data.cover_letter_id,
-                    outreach_id: result.data.outreach_id,
-                    refinement_stats: result.data.refinement_stats,
+                    resume_id: data.resume.id,
+                    is_master: data.resume.isMaster,
+                    status: data.resume.status,
+                    filename: data.resume.filename,
+                    strategy: data.resume.strategy,
+                    job_keywords: data.resume.jobKeywords,
+                    parent_id: data.resume.parentId,
+                    cover_letter_id: data.cover_letter_id,
+                    outreach_id: data.outreach_id,
+                    refinement_stats: data.refinement_stats,
                 },
             },
             { status: 201 }

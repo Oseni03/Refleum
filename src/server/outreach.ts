@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, ResumeStatus } from "@prisma/client";
 import { generateOutreachMessage } from "@/lib/cover-letter";
 import { getResumeById } from "./resumes";
 
@@ -59,14 +59,14 @@ export async function listOutreachMessages(
 export async function createOutreachRecord(input: {
     organizationId: string;
     resumeId: string;
-    content: string;
+    content?: string;
 }): Promise<ServerActionResult<OutreachRecord>> {
     try {
         const result = await prisma.outreach.create({
             data: {
                 organizationId: input.organizationId,
                 resumeId: input.resumeId,
-                content: input.content,
+                ...(input.content !== undefined ? { content: input.content } : {}),
             },
             select: outreachSelect,
         });
@@ -79,7 +79,7 @@ export async function createOutreachRecord(input: {
 export async function updateOutreachRecord(
     outreachId: string,
     organizationId: string,
-    content: string
+    updates: Partial<{ content: string; status: ResumeStatus }>
 ): Promise<ServerActionResult<OutreachRecord>> {
     try {
         const existing = await prisma.outreach.findFirst({
@@ -90,7 +90,7 @@ export async function updateOutreachRecord(
 
         const result = await prisma.outreach.update({
             where: { id: outreachId },
-            data: { content },
+            data: updates,
             select: outreachSelect,
         });
         return { success: true, data: result };
@@ -178,7 +178,10 @@ export async function regenerateOutreach(
 
         if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await updateOutreachRecord(outreachId, organizationId, content);
+        return await updateOutreachRecord(outreachId, organizationId, { 
+            content, 
+            status: "READY" 
+        });
     } catch (e) {
         return { success: false, error: "REGENERATE_FAILED" };
     }
