@@ -156,7 +156,7 @@ export const auth = betterAuth({
         }),
         polar({
             client: polarClient,
-            createCustomerOnSignUp: false,
+            createCustomerOnSignUp: true,
             use: [
                 checkout({
                     products: SUBSCRIPTION_PLANS.map((plan) => ({
