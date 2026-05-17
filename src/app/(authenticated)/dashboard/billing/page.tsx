@@ -27,6 +27,8 @@ export default function BillingPage() {
         error,
         plan,
         handleSubscriptionAction,
+        handleUpgradePlan,
+        handleCancelSubscription,
     } = useBilling();
 
     const currentPlan = SUBSCRIPTION_PLANS.find((p) => p.id === plan) || FREE_PLAN;
@@ -147,13 +149,23 @@ export default function BillingPage() {
                     </div>
 
                     <div className="mt-14 pt-8 border-t border-border/40 flex flex-wrap gap-8 items-center relative z-10">
-                        <button className="text-[10px] font-medium uppercase tracking-[0.2em] text-foreground flex items-center gap-3 group/btn transition-colors hover:text-primary active:scale-95">
+                        <button
+                            onClick={handleUpgradePlan}
+                            disabled={isLoading || !isAdmin}
+                            className="text-[10px] font-medium uppercase tracking-[0.2em] text-foreground flex items-center gap-3 group/btn transition-colors hover:text-primary active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                             Upgrade Plan
                             <ArrowRight className="size-3.5 transition-transform group-hover/btn:translate-x-1.5" />
                         </button>
-                        <button className="text-[10px] font-medium uppercase tracking-[0.2em] opacity-40 hover:text-destructive transition-colors">
-                            Cancel Subscription
-                        </button>
+                        {subscription && (
+                            <button
+                                onClick={handleCancelSubscription}
+                                disabled={isLoading || !isAdmin}
+                                className="text-[10px] font-medium uppercase tracking-[0.2em] opacity-40 hover:text-destructive transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                            >
+                                Cancel Subscription
+                            </button>
+                        )}
                     </div>
                 </div>
 
