@@ -7,7 +7,7 @@
 		"build": "prisma generate && next build",
 		"start": "next start",
 		"lint": "next lint",
-		"postinstall": "prisma generate",
+		"postinstall": "prisma generate && npx puppeteer browsers install chrome",
 		"vercel-build": "prisma generate && next build",
 		"prisma:generate": "prisma generate"
 	},
