@@ -31,7 +31,7 @@ export async function PATCH(
     const { data: body, errResponse: bodyErr } = await parseBody(req, UpdateCoverLetterSchema);
     if (bodyErr) return bodyErr;
 
-    const result = await updateCoverLetterRecord(id, organizationId, body.content);
+    const result = await updateCoverLetterRecord(id, organizationId, { content: body.content });
     if (!result.success) {
         const status = result.error === "NOT_FOUND" ? 404 : 500;
         return NextResponse.json({ error: result.error }, { status });
