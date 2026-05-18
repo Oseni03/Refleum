@@ -136,8 +136,18 @@ export const LlmConfigSchema = z.object({
     defaultPromptId: data.default_prompt_id,
 }));
 
+import { countWords } from "@/lib/utils";
+
 export const tailorSchema = z.object({
-    job_description: z.string().min(50),
+    job_description: z.string().refine(
+        (val) => {
+            const wc = countWords(val);
+            return wc >= 100 && wc <= 8000;
+        },
+        {
+            message: "Job description must be between 100 and 8,000 words",
+        }
+    ),
     strategy: z.nativeEnum(TailorStrategy).optional(),
     generate_cover_letter: z.boolean().optional().default(false),
     generate_outreach: z.boolean().optional().default(false),
