@@ -39,8 +39,8 @@ export async function POST(req: NextRequest) {
 
         if (file.size > MAX_FILE_SIZE_BYTES) {
             return NextResponse.json(
-                { error: "VALIDATION_ERROR", detail: "File exceeds 4 MB limit" },
-                { status: 422 }
+                { error: "PAYLOAD_TOO_LARGE", detail: "File size exceeds the 10 MB limit" },
+                { status: 413 }
             );
         }
 

@@ -185,4 +185,4 @@ export function isAllowedMimeType(contentType: string): boolean {
     return ALLOWED_MIME_TYPES.has(contentType);
 }
 
-export const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
