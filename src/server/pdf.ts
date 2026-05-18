@@ -1,18 +1,23 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 import { getResumeById } from "./resumes";
 import { getCoverLetterById } from "./cover-letters";
 
 export type PdfFormat = "A4" | "Letter";
 
 export async function generatePdfFromHtml(htmlContent: string, format: PdfFormat = "A4") {
+    const executablePath = await chromium.executablePath();
+
     const browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: null,
+        executablePath,
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     try {
         const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        await page.setContent(htmlContent, { waitUntil: 'load' });
 
         const pdfBuffer = await page.pdf({
             format,
