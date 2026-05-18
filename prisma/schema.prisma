@@ -28,7 +28,7 @@ model Subscription {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@map("subscription")
@@ -42,7 +42,7 @@ model UsageRecord {
   polarRecordId  String? // Polar usage record ID for metered billing
   createdAt      DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([organizationId, createdAt])
@@ -73,7 +73,8 @@ model Resume {
   children     Resume[]      @relation("ResumeToResume")
   parent       Resume?       @relation("ResumeToResume", fields: [parentId], references: [id])
   user         User?         @relation(fields: [userId], references: [id])
-  organization Organization  @relation(fields: [organizationId], references: [id])
+  pdf          Bytes? // Cached PDF binary
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([organizationId, isMaster])
@@ -129,7 +130,7 @@ model Integration {
   connectedAt    DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, provider])
   @@map("integration")
