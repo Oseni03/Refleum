@@ -5,9 +5,9 @@ import { authenticate } from "@/lib/api";
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string; clId: string }> }
 ) {
-    const { id } = await params;
+    const { id: resumeId, clId } = await params;
 
     const { ownerId: organizationId, errResponse } = await authenticate(req);
     if (errResponse) return errResponse;
@@ -19,13 +19,13 @@ export async function GET(
         const { searchParams } = new URL(req.url);
         const format = (searchParams.get("format") || "A4") as any;
 
-        const pdfBuffer = await generateCoverLetterPdf(id, organizationId, format);
+        const pdfBuffer = await generateCoverLetterPdf(resumeId, clId, organizationId, format);
 
         return new NextResponse(pdfBuffer as any, {
             status: 200,
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="cover-letter-${id}.pdf"`,
+                "Content-Disposition": `attachment; filename="cover-letter-${resumeId}.pdf"`,
             },
         });
     } catch (e: any) {

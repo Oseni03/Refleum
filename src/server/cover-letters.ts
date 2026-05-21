@@ -19,12 +19,13 @@ export type ServerActionResult<T> =
     | { success: false; error: string };
 
 export async function getCoverLetterById(
+    resumeId: string,
     coverLetterId: string,
     organizationId: string
 ): Promise<ServerActionResult<CoverLetterRecord>> {
     try {
         const coverLetter = await prisma.coverLetter.findFirst({
-            where: { id: coverLetterId, organizationId },
+            where: { id: coverLetterId, organizationId, resumeId },
             select: coverLetterSelect,
         });
         if (!coverLetter) return { success: false, error: "NOT_FOUND" };
@@ -100,12 +101,13 @@ export async function updateCoverLetterRecord(
 }
 
 export async function deleteCoverLetterRecord(
+    resumeId: string,
     coverLetterId: string,
     organizationId: string
 ): Promise<ServerActionResult<{ success: true }>> {
     try {
         const existing = await prisma.coverLetter.findFirst({
-            where: { id: coverLetterId, organizationId },
+            where: { id: coverLetterId, organizationId, resumeId },
             select: { id: true },
         });
         if (!existing) return { success: false, error: "NOT_FOUND" };
@@ -130,7 +132,7 @@ export async function generateCoverLetter(
         const content = await generateCoverLetterText(
             organizationId,
             resumeResult.data.structuredData as Record<string, unknown>,
-            input.jobDescription,
+            input.jobDescription || resumeResult.data.jobDescription || "",
             language
         );
 
@@ -147,35 +149,35 @@ export async function generateCoverLetter(
  * Falls back to the linked resume's stored job_description if no JD is provided.
  */
 export async function regenerateCoverLetter(
+    resumeId: string,
     coverLetterId: string,
     organizationId: string,
     jobDescription?: string
 ): Promise<ServerActionResult<CoverLetterRecord>> {
     try {
-        const existing = await prisma.coverLetter.findFirst({
-            where: { id: coverLetterId, organizationId },
-            select: { id: true, resumeId: true },
+        const result = await prisma.coverLetter.findFirst({
+            where: { id: coverLetterId, organizationId, resumeId },
+            include: {
+                resume: true
+            }
         });
-        if (!existing) return { success: false, error: "NOT_FOUND" };
+        if (!result) return { success: false, error: "NOT_FOUND" };
 
-        const resumeResult = await getResumeById(existing.resumeId, organizationId);
-        if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
-
-        const jd = jobDescription ?? resumeResult.data.jobDescription ?? null;
+        const jd = jobDescription ?? result.resume.jobDescription ?? null;
         if (!jd) return { success: false, error: "NO_JOB_DESCRIPTION" };
 
-        const language = resumeResult.data.outputLanguage ?? "en";
+        const language = result.resume.outputLanguage ?? "en";
         const content = await generateCoverLetterText(
             organizationId,
-            resumeResult.data.structuredData as Record<string, unknown>,
+            result.resume.structuredData as Record<string, unknown>,
             jd,
             language
         );
 
         if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await updateCoverLetterRecord(coverLetterId, organizationId, { 
-            content, 
+        return await updateCoverLetterRecord(coverLetterId, organizationId, {
+            content,
             status: "READY" // Explicitly set to READY after background generation
         });
     } catch (e) {

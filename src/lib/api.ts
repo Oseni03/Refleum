@@ -149,13 +149,9 @@ export const tailorSchema = z.object({
         }
     ),
     strategy: z.nativeEnum(TailorStrategy).optional(),
-    generate_cover_letter: z.boolean().optional().default(false),
-    generate_outreach: z.boolean().optional().default(false),
     output_language: z.string().optional(),
 }).transform((data) => ({
     jobDescription: data.job_description,
     strategy: data.strategy,
-    generateCoverLetter: data.generate_cover_letter,
-    generateOutreach: data.generate_outreach,
     outputLanguage: data.output_language,
 }));

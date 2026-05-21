@@ -28,8 +28,6 @@ export async function POST(
             jobDescription: body.jobDescription,
             strategy: body.strategy?.toUpperCase() as TailorStrategy,
             outputLanguage: body.outputLanguage?.toLowerCase(),
-            generateCoverLetter: body.generateCoverLetter,
-            generateOutreach: body.generateOutreach,
         });
 
         if (!result.success) {
@@ -44,31 +42,7 @@ export async function POST(
 
         const data = result.data;
 
-        // Phase 2: Background Generation of Cover Letter & Outreach
-        after(async () => {
-            try {
-                // Record usage for the tailoring operation
-                await recordUsage(organizationId, "tailor", id);
-
-                if (data.cover_letter_id) {
-                    const { regenerateCoverLetter, updateCoverLetterRecord } = await import("@/server/cover-letters");
-                    const clResult = await regenerateCoverLetter(data.cover_letter_id, organizationId, body.jobDescription);
-                    if (!clResult.success) {
-                        await updateCoverLetterRecord(data.cover_letter_id, organizationId, { status: "FAILED" });
-                    }
-                }
-
-                if (data.outreach_id) {
-                    const { regenerateOutreach, updateOutreachRecord } = await import("@/server/outreach");
-                    const outResult = await regenerateOutreach(data.outreach_id, organizationId, body.jobDescription);
-                    if (!outResult.success) {
-                        await updateOutreachRecord(data.outreach_id, organizationId, { status: "FAILED" });
-                    }
-                }
-            } catch (err) {
-                console.error("Background tailoring tasks failed:", err);
-            }
-        });
+        await recordUsage(organizationId, "tailor", id)
 
         return NextResponse.json(
             {
@@ -80,8 +54,6 @@ export async function POST(
                     strategy: data.resume.strategy,
                     job_keywords: data.resume.jobKeywords,
                     parent_id: data.resume.parentId,
-                    cover_letter_id: data.cover_letter_id,
-                    outreach_id: data.outreach_id,
                     refinement_stats: data.refinement_stats,
                     warnings: data.warnings,
                 },

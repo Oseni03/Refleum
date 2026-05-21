@@ -227,8 +227,6 @@ export async function retryResumeParsing(
 
 export type TailorResult = {
     resume: ResumeRecord;
-    cover_letter_id: string | null;
-    outreach_id: string | null;
     refinement_stats: {
         keywords_injected: number;
         phrases_replaced: number;
@@ -245,8 +243,6 @@ export async function tailorResume(
         jobDescription: string;
         strategy?: TailorStrategy;
         outputLanguage?: string;
-        generateCoverLetter?: boolean;
-        generateOutreach?: boolean;
     }
 ): Promise<ServerActionResult<TailorResult>> {
     try {
@@ -308,7 +304,7 @@ export async function tailorResume(
 
         const finalResumeData = refinementResult.refined_data;
         diffsApplied += refinementResult.passes_completed;
-        
+
         // Collect warnings
         const warnings: RefinementWarning[] = [];
         if (refinementResult.alignment_report && !refinementResult.alignment_report.is_aligned) {
@@ -356,38 +352,10 @@ export async function tailorResume(
 
         const tailoredResume = saveResult.data;
 
-        // Step 6: Create empty cover letter + outreach records synchronously (FR-029)
-        // Actual generation will be triggered in the background via Next.js after().
-        let coverLetterId: string | null = null;
-        let outreachId: string | null = null;
-
-        if (input.generateCoverLetter || input.generateOutreach) {
-            const { createCoverLetterRecord } = await import("./cover-letters");
-            const { createOutreachRecord } = await import("./outreach");
-
-            if (input.generateCoverLetter) {
-                const clResult = await createCoverLetterRecord({
-                    organizationId,
-                    resumeId: tailoredResume.id,
-                });
-                if (clResult.success) coverLetterId = clResult.data.id;
-            }
-
-            if (input.generateOutreach) {
-                const outResult = await createOutreachRecord({
-                    organizationId,
-                    resumeId: tailoredResume.id,
-                });
-                if (outResult.success) outreachId = outResult.data.id;
-            }
-        }
-
         return {
             success: true,
             data: {
                 resume: tailoredResume,
-                cover_letter_id: coverLetterId,
-                outreach_id: outreachId,
                 refinement_stats: {
                     keywords_injected: refinementResult.keyword_analysis?.injectable_keywords.length || 0,
                     phrases_replaced: refinementResult.ai_phrases_removed.length,

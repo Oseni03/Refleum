@@ -43,8 +43,8 @@ export async function generateResumePdf(resumeId: string, organizationId: string
     return generatePdfFromHtml(result.data.html, format);
 }
 
-export async function generateCoverLetterPdf(coverLetterId: string, organizationId: string, format: PdfFormat = "A4") {
-    const result = await getCoverLetterById(coverLetterId, organizationId);
+export async function generateCoverLetterPdf(resumeId: string, coverLetterId: string, organizationId: string, format: PdfFormat = "A4") {
+    const result = await getCoverLetterById(resumeId, coverLetterId, organizationId);
     if (!result.success) throw new Error("Cover Letter not found");
 
     const html = `
