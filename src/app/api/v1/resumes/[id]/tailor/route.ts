@@ -83,6 +83,7 @@ export async function POST(
                     cover_letter_id: data.cover_letter_id,
                     outreach_id: data.outreach_id,
                     refinement_stats: data.refinement_stats,
+                    warnings: data.warnings,
                 },
             },
             { status: 201 }

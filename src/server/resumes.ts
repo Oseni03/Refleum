@@ -9,9 +9,9 @@ import {
     RESUME_SCHEMA_EXAMPLE,
     IMPROVE_SCHEMA_EXAMPLE
 } from "@/lib/prompts/templates";
-import { KEYWORD_INJECTION_PROMPT, VALIDATION_POLISH_PROMPT } from "@/lib/prompts/refinement";
+import { ResumeData, RefinementWarning } from "@/types/resume";
+import { refineResume } from "@/lib/refiner";
 import { restoreDatesFromMarkdown } from "@/lib/resume-utils";
-import { ResumeData } from "@/types/resume";
 
 // Shared select shape
 const resumeSelect = {
@@ -235,6 +235,7 @@ export type TailorResult = {
         diffs_applied: number;
         rejected_changes: number;
     };
+    warnings: RefinementWarning[];
 };
 
 export async function tailorResume(
@@ -297,29 +298,38 @@ export async function tailorResume(
 
         let diffsApplied = 0;
 
-        // Step 3: Keyword Injection Pass (FR-047)
-        const injectionResult = await completeJson<ResumeData>(
-            organizationId,
-            KEYWORD_INJECTION_PROMPT
-                .replace("{keywords_to_inject}", JSON.stringify(keywords.required_skills ?? []))
-                .replace("{current_resume}", JSON.stringify(primaryResult.data))
-                .replace("{master_resume}", JSON.stringify(original.data.structuredData))
-                .replace("{job_description}", input.jobDescription)
-        );
+        // Step 3 & 4: Multi-Pass Refinement Pipeline (FR-047, FR-051)
+        const refinementResult = await refineResume(organizationId, {
+            initialTailored: primaryResult.data as unknown as Record<string, unknown>,
+            masterResume: original.data.structuredData as unknown as Record<string, unknown>,
+            jobDescription: input.jobDescription,
+            jobKeywords: keywords,
+        });
 
-        const afterInjection = injectionResult.success ? injectionResult.data : primaryResult.data;
-        if (injectionResult.success) diffsApplied++;
-
-        // Step 4: Validation & Polish Pass (FR-051)
-        const finalResult = await completeJson<ResumeData>(
-            organizationId,
-            VALIDATION_POLISH_PROMPT
-                .replace("{resume}", JSON.stringify(afterInjection))
-                .replace("{master_resume}", JSON.stringify(original.data.structuredData))
-        );
-
-        const finalResumeData = finalResult.success ? finalResult.data : afterInjection;
-        if (finalResult.success) diffsApplied++;
+        const finalResumeData = refinementResult.refined_data;
+        diffsApplied += refinementResult.passes_completed;
+        
+        // Collect warnings
+        const warnings: RefinementWarning[] = [];
+        if (refinementResult.alignment_report && !refinementResult.alignment_report.is_aligned) {
+            for (const v of refinementResult.alignment_report.violations) {
+                if (v.severity === "critical") continue; // critical violations are auto-fixed
+                warnings.push({
+                    code: v.violation_type.toUpperCase() as any,
+                    detail: `Alignment issue found: ${v.value}`,
+                    severity: v.severity as any,
+                    field_path: v.field_path,
+                    value: v.value
+                });
+            }
+        }
+        if (refinementResult.ai_phrases_removed.length > 0) {
+            warnings.push({
+                code: "AI_PHRASE_DETECTED",
+                detail: `Removed ${refinementResult.ai_phrases_removed.length} common AI phrases.`,
+                severity: "info"
+            });
+        }
 
         // Safety net: restore personalInfo from source (FR-043)
         const completeResumeData = {
@@ -379,11 +389,12 @@ export async function tailorResume(
                 cover_letter_id: coverLetterId,
                 outreach_id: outreachId,
                 refinement_stats: {
-                    keywords_injected: (keywords.required_skills ?? []).length,
-                    phrases_replaced: 0, // local regex pass not yet implemented
+                    keywords_injected: refinementResult.keyword_analysis?.injectable_keywords.length || 0,
+                    phrases_replaced: refinementResult.ai_phrases_removed.length,
                     diffs_applied: diffsApplied,
-                    rejected_changes: 0,
+                    rejected_changes: refinementResult.alignment_report?.violations.filter(v => v.severity === "critical").length || 0,
                 },
+                warnings,
             },
         };
     } catch (e) {

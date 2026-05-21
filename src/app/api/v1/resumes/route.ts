@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
                     is_master: resume.isMaster,
                     status: resume.status,
                     filename: resume.filename,
+                    warnings: [],
                 },
             },
             { status: 201 }
