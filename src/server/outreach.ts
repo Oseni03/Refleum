@@ -20,11 +20,12 @@ export type ServerActionResult<T> =
 
 export async function getOutreachById(
     outreachId: string,
+    resumeId: string,
     organizationId: string
 ): Promise<ServerActionResult<OutreachRecord>> {
     try {
         const outreach = await prisma.outreach.findFirst({
-            where: { id: outreachId, organizationId },
+            where: { id: outreachId, resumeId, organizationId },
             select: outreachSelect,
         });
         if (!outreach) return { success: false, error: "NOT_FOUND" };
@@ -101,16 +102,17 @@ export async function updateOutreachRecord(
 
 export async function deleteOutreachRecord(
     outreachId: string,
+    resumeId: string,
     organizationId: string
 ): Promise<ServerActionResult<{ success: true }>> {
     try {
         const existing = await prisma.outreach.findFirst({
-            where: { id: outreachId, organizationId },
+            where: { id: outreachId, resumeId, organizationId },
             select: { id: true },
         });
         if (!existing) return { success: false, error: "NOT_FOUND" };
 
-        await prisma.outreach.delete({ where: { id: outreachId } });
+        await prisma.outreach.delete({ where: { id: outreachId, resumeId } });
         return { success: true, data: { success: true } };
     } catch (e) {
         return { success: false, error: "INTERNAL_ERROR" };
@@ -124,7 +126,7 @@ export async function deleteOutreachRecord(
 export async function generateOutreach(
     resumeId: string,
     organizationId: string,
-    jobDescription: string,
+    jobDescription?: string,
     outputLanguage = "en"
 ): Promise<ServerActionResult<OutreachRecord>> {
     try {
@@ -134,7 +136,7 @@ export async function generateOutreach(
         const content = await generateOutreachMessage(
             organizationId,
             resumeResult.data.structuredData as Record<string, unknown>,
-            jobDescription,
+            jobDescription || resumeResult.data.jobDescription || "",
             outputLanguage
         );
 
@@ -152,35 +154,35 @@ export async function generateOutreach(
  */
 export async function regenerateOutreach(
     outreachId: string,
+    resumeId: string,
     organizationId: string,
     jobDescription?: string
 ): Promise<ServerActionResult<OutreachRecord>> {
     try {
-        const existing = await prisma.outreach.findFirst({
-            where: { id: outreachId, organizationId },
-            select: { id: true, resumeId: true },
+        const result = await prisma.outreach.findFirst({
+            where: { id: outreachId, organizationId, resumeId },
+            include: { resume: true },
         });
-        if (!existing) return { success: false, error: "NOT_FOUND" };
+        if (!result) return { success: false, error: "NOT_FOUND" };
 
-        const resumeResult = await getResumeById(existing.resumeId, organizationId);
-        if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
+        if (!result.resume) return { success: false, error: "RESUME_NOT_FOUND" };
 
-        const jd = jobDescription ?? resumeResult.data.jobDescription ?? null;
+        const jd = jobDescription ?? result.resume.jobDescription ?? null;
         if (!jd) return { success: false, error: "NO_JOB_DESCRIPTION" };
 
-        const language = resumeResult.data.outputLanguage ?? "en";
+        const language = result.resume.outputLanguage ?? "en";
         const content = await generateOutreachMessage(
             organizationId,
-            resumeResult.data.structuredData as Record<string, unknown>,
+            result.resume.structuredData as Record<string, unknown>,
             jd,
             language
         );
 
         if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await updateOutreachRecord(outreachId, organizationId, { 
-            content, 
-            status: "READY" 
+        return await updateOutreachRecord(outreachId, organizationId, {
+            content,
+            status: "READY"
         });
     } catch (e) {
         return { success: false, error: "REGENERATE_FAILED" };

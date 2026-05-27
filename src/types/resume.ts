@@ -167,6 +167,20 @@ export interface RefinementStats {
     final_match_percentage: number;
 }
 
+export type WarningCode =
+    | "FABRICATED_SKILL"
+    | "FABRICATED_CERT"
+    | "FABRICATED_COMPANY"
+    | "AI_PHRASE_DETECTED";
+
+export interface RefinementWarning {
+    code: WarningCode;
+    detail: string;
+    severity: "info" | "warning" | "critical";
+    field_path?: string;
+    value?: string;
+}
+
 export interface ImproveResumeData {
     request_id: string;
     resume_id?: string | null;
@@ -180,7 +194,7 @@ export interface ImproveResumeData {
     diff_summary?: ResumeDiffSummary | null;
     detailed_changes?: ResumeFieldDiff[] | null;
     refinement_stats?: RefinementStats | null;
-    warnings: string[];
+    warnings: RefinementWarning[];
     refinement_attempted: boolean;
     refinement_successful: boolean;
 }

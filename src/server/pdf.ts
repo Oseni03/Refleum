@@ -1,53 +1,94 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import { prisma } from "@/lib/prisma";
 import { getResumeById } from "./resumes";
 import { getCoverLetterById } from "./cover-letters";
 
 export type PdfFormat = "A4" | "Letter";
 
-export async function generatePdfFromHtml(htmlContent: string, format: PdfFormat = "A4") {
-    const executablePath = await chromium.executablePath();
+export async function generatePdfFromHtml(
+	htmlContent: string,
+	format: PdfFormat = "A4",
+) {
+	const executablePath = await chromium.executablePath();
 
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: null,
-        executablePath,
-        headless: true,
-    });
+	const browser = await puppeteer.launch({
+		args: chromium.args,
+		defaultViewport: null,
+		executablePath,
+		headless: true,
+	});
 
-    try {
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'load' });
+	try {
+		const page = await browser.newPage();
+		await page.setContent(htmlContent, { waitUntil: "load" });
 
-        const pdfBuffer = await page.pdf({
-            format,
-            printBackground: true,
-            margin: {
-                top: '0.75in',
-                right: '0.75in',
-                bottom: '0.75in',
-                left: '0.75in'
-            }
-        });
+		const pdfBuffer = await page.pdf({
+			format,
+			printBackground: true,
+			margin: {
+				top: "0.75in",
+				right: "0.75in",
+				bottom: "0.75in",
+				left: "0.75in",
+			},
+		});
 
-        return pdfBuffer;
-    } finally {
-        await browser.close();
-    }
+		return Buffer.from(pdfBuffer);
+	} finally {
+		await browser.close();
+	}
 }
 
-export async function generateResumePdf(resumeId: string, organizationId: string, format: PdfFormat = "A4") {
-    const result = await getResumeById(resumeId, organizationId);
-    if (!result.success) throw new Error("Resume not found");
-
-    return generatePdfFromHtml(result.data.html, format);
+export async function cacheResumePdf(
+	resumeId: string,
+	organizationId: string,
+	buffer: Buffer,
+): Promise<void> {
+	await prisma.resume.updateMany({
+		where: { id: resumeId, organizationId },
+		data: { pdf: buffer },
+	});
 }
 
-export async function generateCoverLetterPdf(coverLetterId: string, organizationId: string, format: PdfFormat = "A4") {
-    const result = await getCoverLetterById(coverLetterId, organizationId);
-    if (!result.success) throw new Error("Cover Letter not found");
+export async function getCachedResumePdf(
+	resumeId: string,
+	organizationId: string,
+): Promise<Buffer | null> {
+	const row = await prisma.resume.findFirst({
+		where: { id: resumeId, organizationId },
+		select: { pdf: true },
+	});
 
-    const html = `
+	if (!row?.pdf) return null;
+	return Buffer.from(row.pdf);
+}
+
+export async function generateResumePdf(
+	resumeId: string,
+	organizationId: string,
+	format: PdfFormat = "A4",
+) {
+	const result = await getResumeById(resumeId, organizationId);
+	if (!result.success) throw new Error("Resume not found");
+
+	return generatePdfFromHtml(result.data.html, format);
+}
+
+export async function generateCoverLetterPdf(
+	resumeId: string,
+	coverLetterId: string,
+	organizationId: string,
+	format: PdfFormat = "A4",
+) {
+	const result = await getCoverLetterById(
+		resumeId,
+		coverLetterId,
+		organizationId,
+	);
+	if (!result.success) throw new Error("Cover Letter not found");
+
+	const html = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -66,5 +107,5 @@ export async function generateCoverLetterPdf(coverLetterId: string, organization
         </html>
     `;
 
-    return generatePdfFromHtml(html, format);
+	return generatePdfFromHtml(html, format);
 }
