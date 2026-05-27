@@ -50,9 +50,25 @@ export type ApiErrorCode =
 	| "HASH_MISMATCH"
 	| "PERSONAL_INFO_CHANGED"
 	| "APPLY_CONFLICT"
-	| "RATE_LIMITED";
-
-// ─── Auth helper for route handlers ──────────────────────────────────────────
+	| "RATE_LIMITED"
+	| "RESUME_NOT_RENDERED"
+	| "PDF_RENDER_FAILED"
+	| "TAILORING_FAILED"
+	| "MISSING_SOURCE_TEXT"
+	| "LLM_PARSING_FAILED"
+	| "RETRY_FAILED"
+	| "NO_MASTER_RESUME"
+	| "RESUME_NOT_PARSED"
+	| "PRIMARY_TAILORING_FAILED"
+	| "TAILORING_PROCESS_FAILED"
+	| "FILE_NOT_SUPPORTED"
+	| "RESUME_NOT_FOUND"
+	| "LLM_GENERATION_FAILED"
+	| "COVER_LETTER_PROCESS_FAILED"
+	| "OUTREACH_PROCESS_FAILED"
+	| "NO_JOB_DESCRIPTION"
+	| "REGENERATE_FAILED"
+	| "PAYLOAD_TOO_LARGE";
 
 import { requireApiKey, requireRateLimit } from "@/lib/middleware";
 import type { NextRequest } from "next/server";
@@ -177,3 +193,22 @@ export const tailorSchema = z
 		outputLanguage: data.output_language,
 		generatePdf: data.generate_pdf,
 	}));
+
+// ─── Pagination helper ───────────────────────────────────────────────────────
+
+/** Parse `limit`/`offset` query params with sensible defaults and caps. */
+export function parsePagination(
+	req: NextRequest,
+	defaultLimit = 10,
+	maxLimit = 100,
+) {
+	const { searchParams } = new URL(req.url);
+	const limit = Math.min(
+		parseInt(searchParams.get("limit") ?? String(defaultLimit)),
+		maxLimit,
+	);
+	const offset = Math.max(parseInt(searchParams.get("offset") ?? "0"), 0);
+	return { limit, offset };
+}
+
+export { requirePlanOrError } from "@/lib/middleware";

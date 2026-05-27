@@ -13,6 +13,7 @@ import { ResumeData, RefinementWarning } from "@/types/resume";
 import { refineResume } from "@/lib/refiner";
 import { restoreDatesFromMarkdown } from "@/lib/resume-utils";
 import { cacheResumePdf, generatePdfFromHtml } from "@/server/pdf";
+import { ApiErrorCode } from "@/lib/api";
 
 // Shared select shape
 const resumeSelect = {
@@ -60,7 +61,7 @@ export type ResumeListRecord = Prisma.ResumeGetPayload<{
 
 export type ServerActionResult<T> =
 	| { success: true; data: T }
-	| { success: false; error: string };
+	| { success: false; error: ApiErrorCode };
 
 export async function getResumeById(
 	resumeId: string,

@@ -4,7 +4,7 @@ import {
 	getCachedResumePdf,
 	cacheResumePdf,
 } from "@/server/pdf";
-import { authenticate } from "@/lib/api";
+import { authenticate, apiError } from "@/lib/api";
 import { recordUsage } from "@/server/subscription";
 import { prisma } from "@/lib/prisma";
 
@@ -38,14 +38,11 @@ export async function GET(
 		});
 
 		if (!resume) {
-			return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+			return apiError("NOT_FOUND", 404);
 		}
 
 		if (!resume.html) {
-			return NextResponse.json(
-				{ error: "RESUME_NOT_RENDERED" },
-				{ status: 422 },
-			);
+			return apiError("RESUME_NOT_RENDERED", 422);
 		}
 
 		const pdfBuffer = await generatePdfFromHtml(resume.html, format);
@@ -62,10 +59,7 @@ export async function GET(
 				"Content-Disposition": `attachment; filename="resume-${id}.pdf"`,
 			},
 		});
-	} catch {
-		return NextResponse.json(
-			{ error: "PDF_RENDER_FAILED" },
-			{ status: 503 },
-		);
+	} catch (error) {
+		return apiError("PDF_RENDER_FAILED", 503);
 	}
 }
