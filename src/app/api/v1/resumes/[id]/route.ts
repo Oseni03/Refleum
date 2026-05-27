@@ -45,7 +45,7 @@ export async function PATCH(
         return NextResponse.json({ error: result.error }, { status });
     }
 
-    return NextResponse.json({ data: { ...result.data, warnings: [] } });
+    return NextResponse.json({ data: result.data });
 }
 
 export async function DELETE(

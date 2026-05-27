@@ -29,6 +29,7 @@ const resumeSelect = {
     strategy: true,
     title: true,
     outputLanguage: true,
+    warnings: true,
     createdAt: true,
     updatedAt: true,
 } as const;
@@ -165,7 +166,7 @@ export async function updateResumeRecord(
         if (!existing) return { success: false, error: "NOT_FOUND" };
 
         const result = await prisma.resume.update({
-            where: { id: resumeId },
+            where: { id: resumeId, organizationId },
             data: updates,
             select: resumeSelect,
         });
