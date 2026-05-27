@@ -1,27 +1,32 @@
 import { completeJson } from "@/lib/llm";
-import { PARSE_RESUME_PROMPT, RESUME_SCHEMA_EXAMPLE } from "@/lib/prompts/templates";
+import {
+	PARSE_RESUME_PROMPT,
+	RESUME_SCHEMA_EXAMPLE,
+} from "@/lib/prompts/templates";
 import { restoreDatesFromMarkdown } from "@/lib/resume-utils";
 import { convertToMarkdown } from "@cognipeer/to-markdown";
 import { marked } from "marked";
+import { ApiErrorCode } from "./api";
 
 // ─── PDF to Markdown ──────────────────────────────────────────────────────────
 
 async function pdfToMarkdown(buffer: Buffer): Promise<string> {
-    try {
-        const result = await convertToMarkdown(buffer);
-        return result.trim();
-    } catch (err) {
-        console.error("PDF parsing error:", err);
-        throw new Error("Failed to parse PDF document. Ensure it is not password protected.");
-    }
+	try {
+		const result = await convertToMarkdown(buffer);
+		return result.trim();
+	} catch (err) {
+		console.error("PDF parsing error:", err);
+		throw new Error(
+			"Failed to parse PDF document. Ensure it is not password protected.",
+		);
+	}
 }
-
 
 // ─── DOCX to Markdown ─────────────────────────────────────────────────────────
 
 async function docxToMarkdown(buffer: Buffer): Promise<string> {
-    const result = await convertToMarkdown(buffer);
-    return result.trim();
+	const result = await convertToMarkdown(buffer);
+	return result.trim();
 }
 
 // ─── Parse Document (PDF/DOCX → Markdown) ────────────────────────────────────
@@ -31,26 +36,26 @@ async function docxToMarkdown(buffer: Buffer): Promise<string> {
  * Equivalent to Python's parse_document().
  */
 export async function parseToMarkdown(
-    content: Buffer,
-    filename: string
+	content: Buffer,
+	filename: string,
 ): Promise<string> {
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+	const ext = filename.split(".").pop()?.toLowerCase() ?? "";
 
-    if (ext === "pdf") {
-        return pdfToMarkdown(content);
-    }
+	if (ext === "pdf") {
+		return pdfToMarkdown(content);
+	}
 
-    if (ext === "doc" || ext === "docx") {
-        return docxToMarkdown(content);
-    }
+	if (ext === "doc" || ext === "docx") {
+		return docxToMarkdown(content);
+	}
 
-    throw new Error(
-        `Unsupported file type: .${ext}. Only PDF and DOCX are supported.`
-    );
+	throw new Error(
+		`Unsupported file type: .${ext}. Only PDF and DOCX are supported.`,
+	);
 }
 
 function wrapHtml(body: string): string {
-    return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html>
 <head>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -79,66 +84,78 @@ function wrapHtml(body: string): string {
  * 3. Patches dates and returns both formats.
  */
 export async function extractTextFromDocument(
-    buffer: Buffer,
-    filename: string
-): Promise<{ success: true; data: { markdown: string; html: string } } | { success: false; error: string }> {
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+	buffer: Buffer,
+	filename: string,
+): Promise<
+	| { success: true; data: { markdown: string; html: string } }
+	| { success: false; error: ApiErrorCode }
+> {
+	const ext = filename.split(".").pop()?.toLowerCase() ?? "";
 
-    try {
-        let markdown: string;
-        if (ext === "pdf") {
-            markdown = await pdfToMarkdown(buffer);
-        } else if (ext === "doc" || ext === "docx") {
-            markdown = await docxToMarkdown(buffer);
-        } else {
-            return { success: false, error: `Unsupported file type: .${ext}. Only PDF and DOCX are supported.` };
-        }
-        const html = wrapHtml(await marked(markdown));
-        return { success: true, data: { markdown, html } };
-    } catch (err: any) {
-        console.error("Document parsing failed:", err);
-        return { success: false, error: err.message || "DOCUMENT_PARSING_FAILED" };
-    }
+	try {
+		let markdown: string;
+		if (ext === "pdf") {
+			markdown = await pdfToMarkdown(buffer);
+		} else if (ext === "doc" || ext === "docx") {
+			markdown = await docxToMarkdown(buffer);
+		} else {
+			return {
+				success: false,
+				error: "FILE_NOT_SUPPORTED",
+			};
+		}
+		const html = wrapHtml(await marked(markdown));
+		return { success: true, data: { markdown, html } };
+	} catch (err: any) {
+		console.error("Document parsing failed:", err);
+		return {
+			success: false,
+			error: err.message || "DOCUMENT_PARSING_FAILED",
+		};
+	}
 }
 
 export async function parseResume(
-    orgId: string,
-    buffer: Buffer,
-    filename: string
-): Promise<{
-    success: true;
-    data: {
-        markdown: string;
-        html: string;
-        structuredData: Record<string, unknown> | null;
-        structuredDataError?: string;
-    }
-} | {
-    success: false;
-    error: string
-}> {
-    const extractResult = await extractTextFromDocument(buffer, filename);
-    if (!extractResult.success) {
-        return { success: false, error: extractResult.error };
-    }
+	orgId: string,
+	buffer: Buffer,
+	filename: string,
+): Promise<
+	| {
+			success: true;
+			data: {
+				markdown: string;
+				html: string;
+				structuredData: Record<string, unknown> | null;
+				structuredDataError?: string;
+			};
+	  }
+	| {
+			success: false;
+			error: string;
+	  }
+> {
+	const extractResult = await extractTextFromDocument(buffer, filename);
+	if (!extractResult.success) {
+		return { success: false, error: extractResult.error };
+	}
 
-    const { markdown, html } = extractResult.data;
+	const { markdown, html } = extractResult.data;
 
-    try {
-        const structuredData = await parseResumeToJson(orgId, markdown);  // always use markdown for LLM
-        return { success: true, data: { markdown, html, structuredData } };
-    } catch (err: any) {
-        console.error("Structured data parsing failed:", err);
-        return {
-            success: true,
-            data: {
-                markdown,
-                html,
-                structuredData: null,
-                structuredDataError: err.message || "STRUCTURED_PARSING_FAILED",
-            },
-        };
-    }
+	try {
+		const structuredData = await parseResumeToJson(orgId, markdown); // always use markdown for LLM
+		return { success: true, data: { markdown, html, structuredData } };
+	} catch (err: any) {
+		console.error("Structured data parsing failed:", err);
+		return {
+			success: true,
+			data: {
+				markdown,
+				html,
+				structuredData: null,
+				structuredDataError: err.message || "STRUCTURED_PARSING_FAILED",
+			},
+		};
+	}
 }
 
 // ─── Parse Resume to JSON ─────────────────────────────────────────────────────
@@ -152,37 +169,37 @@ export async function parseResume(
  * @param markdownText  Resume content in Markdown format.
  */
 export async function parseResumeToJson(
-    orgId: string,
-    markdownText: string
+	orgId: string,
+	markdownText: string,
 ): Promise<Record<string, unknown>> {
-    const prompt = PARSE_RESUME_PROMPT.replace(
-        "{schema}",
-        RESUME_SCHEMA_EXAMPLE
-    ).replace("{resume_text}", markdownText);
+	const prompt = PARSE_RESUME_PROMPT.replace(
+		"{schema}",
+		RESUME_SCHEMA_EXAMPLE,
+	).replace("{resume_text}", markdownText);
 
-    const result = await completeJson(orgId, prompt, {
-        systemPrompt:
-            "You are a JSON extraction engine. Output only valid JSON, no explanations.",
-    });
+	const result = await completeJson(orgId, prompt, {
+		systemPrompt:
+			"You are a JSON extraction engine. Output only valid JSON, no explanations.",
+	});
 
-    if (!result.success) {
-        throw new Error(`LLM_PARSING_FAILED: ${result.error}`);
-    }
+	if (!result.success) {
+		throw new Error(`LLM_PARSING_FAILED: ${result.error}`);
+	}
 
-    // Patch dates: restore months the LLM may have dropped
-    return restoreDatesFromMarkdown(result.data, markdownText);
+	// Patch dates: restore months the LLM may have dropped
+	return restoreDatesFromMarkdown(result.data, markdownText);
 }
 
 // ─── Validate MIME Type ───────────────────────────────────────────────────────
 
 const ALLOWED_MIME_TYPES = new Set([
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"application/pdf",
+	"application/msword",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
 export function isAllowedMimeType(contentType: string): boolean {
-    return ALLOWED_MIME_TYPES.has(contentType);
+	return ALLOWED_MIME_TYPES.has(contentType);
 }
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB

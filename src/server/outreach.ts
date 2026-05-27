@@ -2,121 +2,126 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma, ResumeStatus } from "@prisma/client";
 import { generateOutreachMessage } from "@/lib/cover-letter";
 import { getResumeById } from "./resumes";
+import { ApiErrorCode } from "@/lib/api";
 
 const outreachSelect = {
-    id: true,
-    organizationId: true,
-    resumeId: true,
-    content: true,
-    createdAt: true,
-    updatedAt: true,
+	id: true,
+	organizationId: true,
+	resumeId: true,
+	content: true,
+	createdAt: true,
+	updatedAt: true,
 } as const;
 
-export type OutreachRecord = Prisma.OutreachGetPayload<{ select: typeof outreachSelect }>;
+export type OutreachRecord = Prisma.OutreachGetPayload<{
+	select: typeof outreachSelect;
+}>;
 
 export type ServerActionResult<T> =
-    | { success: true; data: T }
-    | { success: false; error: string };
+	| { success: true; data: T }
+	| { success: false; error: ApiErrorCode };
 
 export async function getOutreachById(
-    outreachId: string,
-    resumeId: string,
-    organizationId: string
+	outreachId: string,
+	resumeId: string,
+	organizationId: string,
 ): Promise<ServerActionResult<OutreachRecord>> {
-    try {
-        const outreach = await prisma.outreach.findFirst({
-            where: { id: outreachId, resumeId, organizationId },
-            select: outreachSelect,
-        });
-        if (!outreach) return { success: false, error: "NOT_FOUND" };
-        return { success: true, data: outreach };
-    } catch (e) {
-        return { success: false, error: "INTERNAL_ERROR" };
-    }
+	try {
+		const outreach = await prisma.outreach.findFirst({
+			where: { id: outreachId, resumeId, organizationId },
+			select: outreachSelect,
+		});
+		if (!outreach) return { success: false, error: "NOT_FOUND" };
+		return { success: true, data: outreach };
+	} catch (e) {
+		return { success: false, error: "INTERNAL_ERROR" };
+	}
 }
 
 export async function listOutreachMessages(
-    organizationId: string,
-    resumeId?: string,
-    params: { limit: number; offset: number } = { limit: 10, offset: 0 }
+	organizationId: string,
+	resumeId?: string,
+	params: { limit: number; offset: number } = { limit: 10, offset: 0 },
 ): Promise<ServerActionResult<OutreachRecord[]>> {
-    try {
-        const outreachMessages = await prisma.outreach.findMany({
-            where: {
-                organizationId,
-                ...(resumeId ? { resumeId } : {}),
-            },
-            select: outreachSelect,
-            orderBy: { updatedAt: "desc" },
-            take: params.limit,
-            skip: params.offset,
-        });
-        return { success: true, data: outreachMessages };
-    } catch (e) {
-        return { success: false, error: "INTERNAL_ERROR" };
-    }
+	try {
+		const outreachMessages = await prisma.outreach.findMany({
+			where: {
+				organizationId,
+				...(resumeId ? { resumeId } : {}),
+			},
+			select: outreachSelect,
+			orderBy: { updatedAt: "desc" },
+			take: params.limit,
+			skip: params.offset,
+		});
+		return { success: true, data: outreachMessages };
+	} catch (e) {
+		return { success: false, error: "INTERNAL_ERROR" };
+	}
 }
 
 export async function createOutreachRecord(input: {
-    organizationId: string;
-    resumeId: string;
-    content?: string;
+	organizationId: string;
+	resumeId: string;
+	content?: string;
 }): Promise<ServerActionResult<OutreachRecord>> {
-    try {
-        const result = await prisma.outreach.create({
-            data: {
-                organizationId: input.organizationId,
-                resumeId: input.resumeId,
-                ...(input.content !== undefined ? { content: input.content } : {}),
-            },
-            select: outreachSelect,
-        });
-        return { success: true, data: result };
-    } catch (e) {
-        return { success: false, error: "INTERNAL_ERROR" };
-    }
+	try {
+		const result = await prisma.outreach.create({
+			data: {
+				organizationId: input.organizationId,
+				resumeId: input.resumeId,
+				...(input.content !== undefined
+					? { content: input.content }
+					: {}),
+			},
+			select: outreachSelect,
+		});
+		return { success: true, data: result };
+	} catch (e) {
+		return { success: false, error: "INTERNAL_ERROR" };
+	}
 }
 
 export async function updateOutreachRecord(
-    outreachId: string,
-    organizationId: string,
-    updates: Partial<{ content: string; status: ResumeStatus }>
+	outreachId: string,
+	organizationId: string,
+	updates: Partial<{ content: string; status: ResumeStatus }>,
 ): Promise<ServerActionResult<OutreachRecord>> {
-    try {
-        const existing = await prisma.outreach.findFirst({
-            where: { id: outreachId, organizationId },
-            select: { id: true },
-        });
-        if (!existing) return { success: false, error: "NOT_FOUND" };
+	try {
+		const existing = await prisma.outreach.findFirst({
+			where: { id: outreachId, organizationId },
+			select: { id: true },
+		});
+		if (!existing) return { success: false, error: "NOT_FOUND" };
 
-        const result = await prisma.outreach.update({
-            where: { id: outreachId },
-            data: updates,
-            select: outreachSelect,
-        });
-        return { success: true, data: result };
-    } catch (e) {
-        return { success: false, error: "INTERNAL_ERROR" };
-    }
+		const result = await prisma.outreach.update({
+			where: { id: outreachId },
+			data: updates,
+			select: outreachSelect,
+		});
+		return { success: true, data: result };
+	} catch (e) {
+		return { success: false, error: "INTERNAL_ERROR" };
+	}
 }
 
 export async function deleteOutreachRecord(
-    outreachId: string,
-    resumeId: string,
-    organizationId: string
+	outreachId: string,
+	resumeId: string,
+	organizationId: string,
 ): Promise<ServerActionResult<{ success: true }>> {
-    try {
-        const existing = await prisma.outreach.findFirst({
-            where: { id: outreachId, resumeId, organizationId },
-            select: { id: true },
-        });
-        if (!existing) return { success: false, error: "NOT_FOUND" };
+	try {
+		const existing = await prisma.outreach.findFirst({
+			where: { id: outreachId, resumeId, organizationId },
+			select: { id: true },
+		});
+		if (!existing) return { success: false, error: "NOT_FOUND" };
 
-        await prisma.outreach.delete({ where: { id: outreachId, resumeId } });
-        return { success: true, data: { success: true } };
-    } catch (e) {
-        return { success: false, error: "INTERNAL_ERROR" };
-    }
+		await prisma.outreach.delete({ where: { id: outreachId, resumeId } });
+		return { success: true, data: { success: true } };
+	} catch (e) {
+		return { success: false, error: "INTERNAL_ERROR" };
+	}
 }
 
 /**
@@ -124,28 +129,33 @@ export async function deleteOutreachRecord(
  * A job_description is always required per FR-070.
  */
 export async function generateOutreach(
-    resumeId: string,
-    organizationId: string,
-    jobDescription?: string,
-    outputLanguage = "en"
+	resumeId: string,
+	organizationId: string,
+	jobDescription?: string,
+	outputLanguage = "en",
 ): Promise<ServerActionResult<OutreachRecord>> {
-    try {
-        const resumeResult = await getResumeById(resumeId, organizationId);
-        if (!resumeResult.success) return { success: false, error: "RESUME_NOT_FOUND" };
+	try {
+		const resumeResult = await getResumeById(resumeId, organizationId);
+		if (!resumeResult.success)
+			return { success: false, error: "RESUME_NOT_FOUND" };
 
-        const content = await generateOutreachMessage(
-            organizationId,
-            resumeResult.data.structuredData as Record<string, unknown>,
-            jobDescription || resumeResult.data.jobDescription || "",
-            outputLanguage
-        );
+		const content = await generateOutreachMessage(
+			organizationId,
+			resumeResult.data.structuredData as Record<string, unknown>,
+			jobDescription || resumeResult.data.jobDescription || "",
+			outputLanguage,
+		);
 
-        if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
+		if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await createOutreachRecord({ organizationId, resumeId, content });
-    } catch (e) {
-        return { success: false, error: "OUTREACH_PROCESS_FAILED" };
-    }
+		return await createOutreachRecord({
+			organizationId,
+			resumeId,
+			content,
+		});
+	} catch (e) {
+		return { success: false, error: "OUTREACH_PROCESS_FAILED" };
+	}
 }
 
 /**
@@ -153,38 +163,39 @@ export async function generateOutreach(
  * Falls back to the linked resume's stored job_description if no JD is provided.
  */
 export async function regenerateOutreach(
-    outreachId: string,
-    resumeId: string,
-    organizationId: string,
-    jobDescription?: string
+	outreachId: string,
+	resumeId: string,
+	organizationId: string,
+	jobDescription?: string,
 ): Promise<ServerActionResult<OutreachRecord>> {
-    try {
-        const result = await prisma.outreach.findFirst({
-            where: { id: outreachId, organizationId, resumeId },
-            include: { resume: true },
-        });
-        if (!result) return { success: false, error: "NOT_FOUND" };
+	try {
+		const result = await prisma.outreach.findFirst({
+			where: { id: outreachId, organizationId, resumeId },
+			include: { resume: true },
+		});
+		if (!result) return { success: false, error: "NOT_FOUND" };
 
-        if (!result.resume) return { success: false, error: "RESUME_NOT_FOUND" };
+		if (!result.resume)
+			return { success: false, error: "RESUME_NOT_FOUND" };
 
-        const jd = jobDescription ?? result.resume.jobDescription ?? null;
-        if (!jd) return { success: false, error: "NO_JOB_DESCRIPTION" };
+		const jd = jobDescription ?? result.resume.jobDescription ?? null;
+		if (!jd) return { success: false, error: "NO_JOB_DESCRIPTION" };
 
-        const language = result.resume.outputLanguage ?? "en";
-        const content = await generateOutreachMessage(
-            organizationId,
-            result.resume.structuredData as Record<string, unknown>,
-            jd,
-            language
-        );
+		const language = result.resume.outputLanguage ?? "en";
+		const content = await generateOutreachMessage(
+			organizationId,
+			result.resume.structuredData as Record<string, unknown>,
+			jd,
+			language,
+		);
 
-        if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
+		if (!content) return { success: false, error: "LLM_GENERATION_FAILED" };
 
-        return await updateOutreachRecord(outreachId, organizationId, {
-            content,
-            status: "READY"
-        });
-    } catch (e) {
-        return { success: false, error: "REGENERATE_FAILED" };
-    }
+		return await updateOutreachRecord(outreachId, organizationId, {
+			content,
+			status: "READY",
+		});
+	} catch (e) {
+		return { success: false, error: "REGENERATE_FAILED" };
+	}
 }
