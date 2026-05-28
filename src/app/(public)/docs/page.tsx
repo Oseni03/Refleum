@@ -34,19 +34,18 @@ const NAV = [
         group: "Cover Letters",
         items: [
             { id: "cl-list", label: "List Cover Letters" },
+            { id: "cl-generate", label: "Generate Cover Letter" },
             { id: "cl-get", label: "Get Cover Letter" },
-            { id: "cl-patch", label: "Update Cover Letter" },
             { id: "cl-delete", label: "Delete Cover Letter" },
             { id: "cl-regenerate", label: "Regenerate" },
-            { id: "cl-pdf", label: "Export PDF" },
         ],
     },
     {
         group: "Outreach",
         items: [
             { id: "out-list", label: "List Outreach" },
+            { id: "out-generate", label: "Generate Outreach" },
             { id: "out-get", label: "Get Outreach" },
-            { id: "out-patch", label: "Update Outreach" },
             { id: "out-delete", label: "Delete Outreach" },
             { id: "out-regenerate", label: "Regenerate" },
         ],
@@ -271,10 +270,11 @@ export default function DocsPage(): React.ReactElement {
                     <section id="authentication" className="scroll-mt-6 space-y-5">
                         <h2 className="text-2xl font-bold text-foreground">Authentication</h2>
                         <p className="text-sm text-muted-foreground">
-                            All endpoints require a valid organization API key passed in the <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">Authorization</code> header.
+                            All endpoints require a valid organization API key passed in the <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">Authorization</code> header or the <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">x-api-key</code> header.
                             Keys are created and revoked from your organization dashboard. Each key is hashed (SHA-256) and shown only once at creation.
                         </p>
-                        <CodeBlock language="http" code={`Authorization: Bearer sk_live_••••••••••••••••`} />
+                        <CodeBlock language="http" code={`Authorization: Bearer sk_live_••••••••••••••••
+x-api-key: sk_live_••••••••••••••••`} />
                         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-600 dark:text-amber-400">
                             <strong>Security note:</strong> The <code className="text-xs font-mono">organizationId</code> is always derived from your verified API key — it is never read from the request body. A leaked key must never impersonate a session.
                         </div>
@@ -325,17 +325,16 @@ Retry-After: 42   # only present on 429`} />
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {[
-                                        ["401", "MISSING_KEY / INVALID_KEY", "API key absent or revoked"],
+                                        ["401", "MISSING_KEY / INVALID_KEY", "API key missing or invalid"],
+                                        ["401", "UNAUTHORIZED", "Authentication failed"],
                                         ["403", "PLAN_REQUIRED", "Endpoint requires Starter+ plan"],
-                                        ["400", "VALIDATION_ERROR", "Bad MIME type, file too large, or missing required field (see detail)"],
-                                        ["400", "NO_MASTER_RESUME", "No master resume set and no id in path"],
-                                        ["400", "NO_JOB_DESCRIPTION", "Regenerate called with no JD on linked resume"],
-                                        ["400", "INVALID_INPUT", "Request body failed schema validation"],
-                                        ["404", "NOT_FOUND", "Resource not found or belongs to another org"],
-                                        ["429", "RATE_LIMITED", "Per-minute sliding window exceeded"],
-                                        ["429", "MONTHLY_LIMIT_REACHED", "Free-tier monthly quota exhausted"],
-                                        ["504", "TIMEOUT", "Tailoring exceeded 240 s hard limit"],
-                                        ["503", "PDF_GENERATION_FAILED", "Headless Chromium render error"],
+                                        ["400", "VALIDATION_ERROR", "Body or query validation failed"],
+                                        ["400", "NO_MASTER_RESUME", "Tailoring requires a master resume or valid resume_id"],
+                                        ["400", "NO_JOB_DESCRIPTION", "Regenerate requires a linked job description"],
+                                        ["404", "NOT_FOUND", "Resource not found or belongs to another organization"],
+                                        ["429", "RATE_LIMITED", "Request rate limit exceeded"],
+                                        ["504", "TIMEOUT", "Tailoring exceeded the hard timeout"],
+                                        ["503", "PDF_RENDER_FAILED", "PDF rendering failed"],
                                         ["500", "INTERNAL_ERROR", "Unexpected server error"],
                                     ].map(([code, literal, meaning]) => (
                                         <tr key={literal}>
@@ -466,35 +465,36 @@ Retry-After: 42   # only present on 429`} />
                         <h2 className="text-xl font-bold text-foreground border-b border-border pb-3">Cover Letters</h2>
 
                         <div id="cl-list" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="cl-list-header" method="GET" path="/api/v1/cover-letters" description="List cover letters for your organization. Supports filtering by resume_id." />
+                            <SectionHeader id="cl-list-header" method="GET" path="/api/v1/resumes/{id}/cover-letters" description="List cover letters for a specific resume." />
                             <table className="w-full"><tbody>
-                                <ParamRow name="resume_id" type="string" desc="Filter to cover letters linked to a specific resume." />
+                                <ParamRow name="id" type="string" required desc="Resume ID to list cover letters for." />
+                                <ParamRow name="limit" type="number" desc="Page size. Default: 20." />
+                                <ParamRow name="offset" type="number" desc="Pagination offset." />
                             </tbody></table>
                         </div>
 
-                        <div id="cl-get" className="scroll-mt-6">
-                            <SectionHeader id="cl-get-header" method="GET" path="/api/v1/cover-letters/{id}" description="Retrieve a single cover letter including its full content." />
-                        </div>
-
-                        <div id="cl-patch" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="cl-patch-header" method="PATCH" path="/api/v1/cover-letters/{id}" description="Manually replace cover letter content. No LLM call is made." />
-                            <CodeBlock language="json" code={`{ "content": "Dear Hiring Manager,\\n\\nI'm excited to apply..." }`} />
-                        </div>
-
-                        <div id="cl-delete" className="scroll-mt-6">
-                            <SectionHeader id="cl-delete-header" method="DELETE" path="/api/v1/cover-letters/{id}" description="Delete a cover letter record." />
-                        </div>
-
-                        <div id="cl-regenerate" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="cl-regen-header" method="POST" path="/api/v1/cover-letters/{id}/regenerate" planGate="Starter+" description="Regenerate the cover letter via AI. Accepts an optional job_description override; falls back to the linked resume's stored JD. Updates the record in place (same ID). Output: 100–150 words, 3–4 paragraphs, no em-dashes." />
+                        <div id="cl-generate" className="scroll-mt-6 space-y-4">
+                            <SectionHeader id="cl-generate-header" method="POST" path="/api/v1/resumes/{id}/cover-letters" planGate="Starter+" description="Generate a new cover letter for the specified resume. Accepts an optional job_description override; falls back to the resume's stored job description." />
                             <table className="w-full"><tbody>
                                 <ParamRow name="job_description" type="string" desc="Optional JD override. Falls back to the linked resume's stored JD if omitted." />
                             </tbody></table>
                         </div>
 
-                        <div id="cl-pdf" className="scroll-mt-6">
-                            <SectionHeader id="cl-pdf-header" method="GET" path="/api/v1/cover-letters/{id}/pdf" description="Render and download the cover letter as a PDF. Accepts the same query parameters as resume PDF export." />
+                        <div id="cl-get" className="scroll-mt-6">
+                            <SectionHeader id="cl-get-header" method="GET" path="/api/v1/resumes/{id}/cover-letters/{clId}" description="Retrieve a single cover letter including its full content." />
                         </div>
+
+                        <div id="cl-delete" className="scroll-mt-6">
+                            <SectionHeader id="cl-delete-header" method="DELETE" path="/api/v1/resumes/{id}/cover-letters/{clId}" description="Delete a cover letter record." />
+                        </div>
+
+                        <div id="cl-regenerate" className="scroll-mt-6 space-y-4">
+                            <SectionHeader id="cl-regen-header" method="POST" path="/api/v1/resumes/{id}/cover-letters/{clId}/regenerate" planGate="Starter+" description="Regenerate the cover letter via AI. Optionally override the stored job description. Updates the record in place (same ID)." />
+                            <table className="w-full"><tbody>
+                                <ParamRow name="job_description" type="string" desc="Optional JD override. Falls back to the linked resume's stored JD if omitted." />
+                            </tbody></table>
+                        </div>
+
                     </div>
 
                     {/* ── OUTREACH ENDPOINTS ── */}
@@ -502,29 +502,33 @@ Retry-After: 42   # only present on 429`} />
                         <h2 className="text-xl font-bold text-foreground border-b border-border pb-3">Outreach Messages</h2>
 
                         <div id="out-list" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="out-list-header" method="GET" path="/api/v1/outreach" description="List outreach messages for your organization. Supports filtering by resume_id." />
+                            <SectionHeader id="out-list-header" method="GET" path="/api/v1/resumes/{id}/outreach" description="List outreach messages for a specific resume." />
                             <table className="w-full"><tbody>
-                                <ParamRow name="resume_id" type="string" desc="Filter by linked resume." />
+                                <ParamRow name="id" type="string" required desc="Resume ID to list outreach messages for." />
+                                <ParamRow name="limit" type="number" desc="Page size. Default: 20." />
+                                <ParamRow name="offset" type="number" desc="Pagination offset." />
+                            </tbody></table>
+                        </div>
+
+                        <div id="out-generate" className="scroll-mt-6 space-y-4">
+                            <SectionHeader id="out-generate-header" method="POST" path="/api/v1/resumes/{id}/outreach" planGate="Starter+" description="Generate a new outreach message for the specified resume. Accepts an optional job_description override; falls back to stored resume JD." />
+                            <table className="w-full"><tbody>
+                                <ParamRow name="job_description" type="string" desc="Optional JD override. Falls back to the linked resume's stored JD if omitted." />
                             </tbody></table>
                         </div>
 
                         <div id="out-get" className="scroll-mt-6">
-                            <SectionHeader id="out-get-header" method="GET" path="/api/v1/outreach/{id}" description="Retrieve a single outreach message." />
-                        </div>
-
-                        <div id="out-patch" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="out-patch-header" method="PATCH" path="/api/v1/outreach/{id}" description="Manually replace outreach content. No LLM call." />
-                            <CodeBlock language="json" code={`{ "content": "Hi [Name], I came across your posting for..." }`} />
+                            <SectionHeader id="out-get-header" method="GET" path="/api/v1/resumes/{id}/outreach/{oId}" description="Retrieve a single outreach message." />
                         </div>
 
                         <div id="out-delete" className="scroll-mt-6">
-                            <SectionHeader id="out-delete-header" method="DELETE" path="/api/v1/outreach/{id}" description="Delete an outreach message." />
+                            <SectionHeader id="out-delete-header" method="DELETE" path="/api/v1/resumes/{id}/outreach/{oId}" description="Delete an outreach message." />
                         </div>
 
                         <div id="out-regenerate" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="out-regen-header" method="POST" path="/api/v1/outreach/{id}/regenerate" planGate="Starter+" description="Regenerate the outreach message via AI. Output: 70–100 words, must open with a specific JD reference. Updates in place (same ID)." />
+                            <SectionHeader id="out-regen-header" method="POST" path="/api/v1/resumes/{id}/outreach/{oId}/regenerate" planGate="Starter+" description="Regenerate the outreach message via AI. Optionally override the stored job description. Updates in place (same ID)." />
                             <table className="w-full"><tbody>
-                                <ParamRow name="job_description" type="string" desc="Optional JD override. Falls back to linked resume's stored JD." />
+                                <ParamRow name="job_description" type="string" desc="Optional JD override. Falls back to the linked resume's stored JD if omitted." />
                             </tbody></table>
                         </div>
                     </div>
@@ -534,19 +538,19 @@ Retry-After: 42   # only present on 429`} />
                         <h2 className="text-xl font-bold text-foreground border-b border-border pb-3">Settings &amp; Health</h2>
 
                         <div id="settings-llm" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="settings-llm-header" method="GET" path="/api/v1/settings/llm" description="Retrieve the organisation's LLM configuration. The stored API key is masked in the response." />
-                            <SectionHeader id="settings-llm-put-header" method="PUT" path="/api/v1/settings/llm" description="Update LLM provider, model, API key, and feature flags. All fields are optional — omit any field to leave it unchanged." />
+                            <SectionHeader id="settings-llm-header" method="GET" path="/api/v1/llm-config" description="Retrieve the organisation's LLM configuration. The stored API key is masked in the response." />
+                            <SectionHeader id="settings-llm-put-header" method="PUT" path="/api/v1/llm-config" description="Update LLM provider, model, API key, and feature flags. All fields are optional — omit any field to leave it unchanged." />
                             <div className="space-y-3 px-1">
                                 <table className="w-full"><tbody>
                                     <ParamRow name="provider" type="string" desc="LLM provider identifier (e.g. openai, anthropic)." />
                                     <ParamRow name="model" type="string" desc="Model name (e.g. gpt-4o, claude-3-5-sonnet)." />
-                                    <ParamRow name="apiKey" type="string" desc="Raw API key for the provider (stored encrypted)." />
-                                    <ParamRow name="apiBase" type="string | null" desc="Custom base URL for self-hosted or proxy endpoints." />
-                                    <ParamRow name="reasoningEffort" type='"minimal"|"low"|"medium"|"high"' desc="Reasoning effort for supported models. Pass empty string to clear." />
-                                    <ParamRow name="enableCoverLetter" type="boolean" desc="Enable automatic cover letter generation during tailoring." />
-                                    <ParamRow name="enableOutreachMessage" type="boolean" desc="Enable automatic outreach message generation during tailoring." />
-                                    <ParamRow name="contentLanguage" type="string" desc="Default output language (BCP-47 tag, e.g. en, es, zh)." />
-                                    <ParamRow name="defaultPromptId" type="string" desc="Default tailoring strategy (nudge | keywords | full)." />
+                                    <ParamRow name="api_key" type="string" desc="Raw API key for the provider (stored encrypted)." />
+                                    <ParamRow name="api_base" type="string | null" desc="Custom base URL for self-hosted or proxy endpoints." />
+                                    <ParamRow name="reasoning_effort" type='"minimal"|"low"|"medium"|"high"' desc="Reasoning effort for supported models. Pass empty string to clear." />
+                                    <ParamRow name="enable_cover_letter" type="boolean" desc="Enable automatic cover letter generation during tailoring." />
+                                    <ParamRow name="enable_outreach_message" type="boolean" desc="Enable automatic outreach message generation during tailoring." />
+                                    <ParamRow name="content_language" type="string" desc="Default output language (BCP-47 tag, e.g. en, es, zh)." />
+                                    <ParamRow name="default_prompt_id" type="string" desc="Default tailoring strategy (nudge | keywords | full)." />
                                 </tbody></table>
                             </div>
                         </div>

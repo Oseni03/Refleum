@@ -6,11 +6,11 @@
 
 ## 1. Project Identity
 
-Full-stack SaaS boilerplate on Next.js 15.5.3 (App Router), Prisma ORM 6.16.2, PostgreSQL,
-Better Auth 1.3.17, Polar.sh (billing/MoR), Tailwind CSS 4, shadcn/ui, TypeScript strict.
+API-first resume tailoring SaaS built with Next.js App Router 16.2.6, Prisma ORM 6.16.2, PostgreSQL,
+Better Auth 1.8.3, Tailwind CSS 4, shadcn/ui, TypeScript strict, and AI integrations.
 
 Deployment target: Vercel (frontend + serverless functions).
-Database host: Neon (serverless PostgreSQL). Connection pooling via Prisma Accelerate.
+Database host: Neon / PostgreSQL. Connection pooling via Prisma Accelerate.
 Package manager: npm. Monolith (not monorepo).
 
 ---
@@ -21,27 +21,47 @@ Package manager: npm. Monolith (not monorepo).
 src/
 ├── app/                            # Next.js App Router
 │   ├── api/                        # API routes
-│   │   ├── accept-invitation/      # Accept invitation endpoint
+│   │   ├── accept-invitation/      # Invitation handling
 │   │   ├── auth/                   # Better Auth catch-all handler
-│   │   ├── integrations/           # Integrations API
-│   │   ├── reject-invitation/      # Reject invitation endpoint
-│   │   └── subscription/           # Subscription API
-│   ├── (public)/about/             # /about page — must reflect current product
-│   ├── (public)/privacy/           # /privacy page — must reflect current data practices
-│   ├── (public)/terms/             # /terms page — must reflect current plan/usage rules
-│   ├── (authenticated)/dashboard/  # Dashboard pages
-│   ├── (auth)/sign-in/             # Signin page
-│   ├── (auth)/sign-up/             # Signup page
+│   │   ├── feedback/               # Feedback endpoints
+│   │   ├── integrations/           # External integration APIs
+│   │   ├── keys/                   # API key management
+│   │   ├── reject-invitation/      # Invitation rejection
+│   │   ├── subscription/           # Subscription/webhook API
+│   │   └── v1/                     # Versioned public API
+│   │       ├── health/             # Health check
+│   │       ├── llm-config/         # LLM settings CRUD
+│   │       └── resumes/            # Resume + generated-content APIs
+│   │           ├── route.ts
+│   │           └── [id]/
+│   │               ├── cover-letters/
+│   │               ├── outreach/
+│   │               ├── pdf/
+│   │               ├── retry/
+│   │               ├── tailor/
+│   │               └── route.ts
+│   ├── (public)/about/             # Public about page
+│   ├── (public)/contact/           # Contact page
+│   ├── (public)/docs/              # Developer docs page
+│   ├── (public)/privacy/           # Privacy page
+│   ├── (public)/terms/             # Terms page
+│   ├── (authenticated)/dashboard/  # Authenticated application pages
+│   ├── (auth)/sign-in/             # Sign-in page
+│   ├── (auth)/sign-up/             # Sign-up page
+│   ├── favicon.ico
 │   ├── globals.css                 # Global styles
 │   ├── layout.tsx                  # Root layout
-│   └── page.tsx                    # Home page
+│   └── page.tsx                    # Public home page
 ├── components/                     # React components
 │   ├── ui/                         # shadcn/ui primitives — NEVER edit directly
 │   ├── app-sidebar.tsx
+│   ├── feedback-modal.tsx
 │   ├── nav-main.tsx
 │   ├── nav-user.tsx
+│   ├── social-login-button.tsx
 │   ├── team-switcher.tsx
 │   ├── dashboard/
+│   ├── docs/
 │   ├── emails/
 │   ├── forms/
 │   ├── settings/
@@ -52,31 +72,38 @@ src/
 ├── hooks/
 │   └── use-mobile.ts
 ├── lib/                        # Utility libraries
+│   ├── api.ts                  # Shared API helpers and response constructors
 │   ├── auth.ts                 # Better Auth server config (SINGLE SOURCE)
 │   ├── auth-client.ts          # Better Auth browser client (SINGLE SOURCE)
 │   ├── auth-utils.ts
-│   ├── middleware.ts           # Auth/authz helpers — SINGLE SOURCE for requireSession,
-│   │                           #   requirePlan, requireApiKey. Never write ad-hoc auth inline.
+│   ├── middleware.ts           # Auth/authz helpers — SINGLE SOURCE for requireSession, requireApiKey, requirePlan
 │   ├── prisma.ts               # Prisma singleton (SINGLE SOURCE)
 │   ├── polar.ts                # Polar client singleton (SINGLE SOURCE)
 │   ├── resend.ts
+│   ├── parser.ts               # Resume parsing helpers
+│   ├── resume-utils.ts
 │   ├── utils.ts
-│   └── auth/
+│   └── prompts/
 ├── server/                     # Server-side functions
+│   ├── cover-letters.ts
+│   ├── dashboard.ts
 │   ├── integrations.ts
-│   ├── invitations.ts
+│   ├── llm-config.ts
 │   ├── members.ts
 │   ├── notifications.ts
 │   ├── organizations.ts
+│   ├── outreach.ts
+│   ├── pdf.ts
 │   ├── permissions.ts
 │   ├── polar.ts
+│   ├── resumes.ts
 │   ├── security.ts
 │   ├── subscription.ts
 │   ├── users.ts
 │   └── versions.ts
 ├── types/                      # Shared TypeScript types — SINGLE SOURCE for server↔client boundary
 │   ├── index.ts                # Re-exports all domain type files
-│   └── *.ts                    # One file per domain (e.g. invitations.ts, projects.ts)
+│   └── *.ts                    # One file per domain
 ├── zustand/
 │   ├── providers/
 │   └── stores/                 # Zustand store definitions — only here, never colocated

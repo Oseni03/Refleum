@@ -3,7 +3,7 @@ import { authenticate, apiOk, apiError, parseBody, LlmConfigSchema } from "@/lib
 import { getLlmConfig, updateLlmConfig } from "@/server/llm-config";
 
 /**
- * GET /api/settings/llm
+ * GET /api/v1/llm-config
  * Returns the caller's LLM configuration (API key is masked).
  * Returns: { data: LlmConfigPayload }
  */
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * PUT /api/settings/llm
+ * PUT /api/v1/llm-config
  * Update LLM provider, model, API key, and feature flags.
  * Omit a field to leave it unchanged.
  *
