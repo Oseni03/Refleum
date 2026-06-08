@@ -1,65 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-	generatePdfFromHtml,
-	getCachedResumePdf,
-	cacheResumePdf,
-} from "@/server/pdf";
-import { authenticate, apiError } from "@/lib/api";
-import { recordUsage } from "@/server/subscription";
 import { prisma } from "@/lib/prisma";
+import { generatePdfFromHtml } from "@/server/pdf";
 
+// GET /api/v1/resumes/:id/pdf
+// Unauthenticated — returns the raw PDF binary for the resume.
+// Serves the cached `pdf` bytes when available; falls back to on-the-fly
+// rendering and caches the result back to the database.
 export async function GET(
-	req: NextRequest,
+	_req: NextRequest,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
 	const { id } = await params;
-	const { ownerId: organizationId, errResponse } = await authenticate(req);
-	if (errResponse) return errResponse;
 
 	try {
-		const { searchParams } = new URL(req.url);
-		const format = (searchParams.get("format") || "A4") as any;
-
-		const cachedPdf = await getCachedResumePdf(id, organizationId);
-		if (cachedPdf) {
-			await recordUsage(organizationId, "pdf_export");
-			return new NextResponse(cachedPdf as any, {
-				status: 200,
-				headers: {
-					"Content-Type": "application/pdf",
-					"Content-Disposition": `attachment; filename="resume-${id}.pdf"`,
-				},
-			});
-		}
-
-		const resume = await prisma.resume.findFirst({
-			where: { id, organizationId },
-			select: { html: true },
+		const resume = await prisma.resume.findUnique({
+			where: { id },
+			select: {
+				id: true,
+				pdf: true,
+				html: true,
+				filename: true,
+			},
 		});
 
 		if (!resume) {
-			return apiError("NOT_FOUND", 404);
+			return new NextResponse("Resume not found", { status: 404 });
 		}
 
-		if (!resume.html) {
-			return apiError("RESUME_NOT_RENDERED", 422);
+		let pdfBuffer: Buffer;
+
+		if (resume.pdf) {
+			pdfBuffer = Buffer.from(resume.pdf);
+		} else {
+			// On-the-fly rendering fallback — cache result for subsequent requests
+			pdfBuffer = await generatePdfFromHtml(resume.html);
+
+			await prisma.resume.update({
+				where: { id },
+				data: { pdf: pdfBuffer },
+			});
 		}
 
-		const pdfBuffer = await generatePdfFromHtml(resume.html, format);
-
-		cacheResumePdf(id, organizationId, Buffer.from(pdfBuffer)).catch(
-			() => {},
-		);
-		await recordUsage(organizationId, "pdf_export");
-
-		return new NextResponse(pdfBuffer as any, {
-			status: 200,
+		return new NextResponse(pdfBuffer, {
 			headers: {
 				"Content-Type": "application/pdf",
-				"Content-Disposition": `attachment; filename="resume-${id}.pdf"`,
+				"Content-Disposition": `inline; filename="${encodeURIComponent(
+					resume.filename || "resume",
+				)}.pdf"`,
 			},
 		});
-	} catch (error) {
-		return apiError("PDF_RENDER_FAILED", 503);
+	} catch (e: unknown) {
+		const message = e instanceof Error ? e.message : "Unknown error";
+		console.error(`Error serving PDF for resume ${id}:`, message);
+		return new NextResponse("Failed to load PDF", { status: 500 });
 	}
 }

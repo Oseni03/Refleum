@@ -259,7 +259,6 @@ export default function DocsPage(): React.ReactElement {
                                 <div className="flex-1 space-y-2">
                                     <p className="text-sm font-medium text-foreground">Download the tailored PDF</p>
                                     <CodeBlock language="bash" code={`curl ${process.env.NEXT_PUBLIC_APP_URL}/api/v1/resumes/{resume_id}/pdf \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
   --output tailored_resume.pdf`} />
                                 </div>
                             </div>
@@ -453,10 +452,7 @@ Retry-After: 42   # only present on 429`} />
                         </div>
 
                         <div id="resume-pdf" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="resume-pdf-header" method="GET" path="/api/v1/resumes/{id}/pdf" description="Render and return the resume as a PDF (application/pdf). Uses headless Chromium." />
-                            <table className="w-full"><tbody>
-                                <ParamRow name="format" type='"A4" | "LETTER"' desc='Page size. Default: "A4".' />
-                            </tbody></table>
+                            <SectionHeader id="resume-pdf-header" method="GET" path="/api/v1/resumes/{id}/pdf" description="Public PDF viewer page. Embeds and renders the PDF inline." />
                         </div>
                     </div>
 

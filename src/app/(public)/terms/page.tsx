@@ -131,7 +131,7 @@ export default function TermsPage(): React.ReactElement {
                 <ul className="list-disc pl-5 space-y-1.5">
                     <li>
                         <strong>Metered operation:</strong> each call to{" "}
-                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">POST /api/resumes/tailor</code>{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">POST /api/v1/resumes/{"{"}id{"}"}/tailor</code>{" "}
                         consumes one unit of your monthly allowance, whether the pipeline succeeds or fails,
                         because every call incurs LLM API costs.
                     </li>

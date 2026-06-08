@@ -36,7 +36,13 @@ export async function GET(req: NextRequest) {
 	});
 	if (!result.success) return apiError(result.error, 500);
 
-	return apiOk(result.data);
+	const origin = req.nextUrl.origin;
+	const dataWithPdfUrl = result.data.map((r) => ({
+		...r,
+		pdfUrl: `${origin}/api/v1/resumes/${r.id}/pdf`,
+	}));
+
+	return apiOk(dataWithPdfUrl);
 }
 
 export async function POST(req: NextRequest) {

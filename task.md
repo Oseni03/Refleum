@@ -4,6 +4,8 @@
   - [x] src/server/outreach.ts
   - [x] src/server/subscription.ts
   - [x] src/server/organizations.ts
+- [x] Add `transformToSnakeCase` utility and response helpers to `src/lib/api.ts`
+- [x] Create public raw PDF route `/resumes/[resumeId]/pdf/raw`
 - [x] Step 4: API Key Plugin
 - [x] Step 5: Middleware
 - [ ] Step 6: Route Handlers

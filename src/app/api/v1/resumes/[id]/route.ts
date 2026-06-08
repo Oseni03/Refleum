@@ -29,7 +29,13 @@ export async function GET(
 		return apiError(result.error, status);
 	}
 
-	return apiOk(result.data);
+	const origin = req.nextUrl.origin;
+	const dataWithPdfUrl = {
+		...result.data,
+		pdfUrl: `${origin}/api/v1/resumes/${result.data.id}/pdf`,
+	};
+
+	return apiOk(dataWithPdfUrl);
 }
 
 export async function PATCH(
@@ -52,7 +58,13 @@ export async function PATCH(
 		return apiError(result.error, status);
 	}
 
-	return apiOk(result.data);
+	const origin = req.nextUrl.origin;
+	const dataWithPdfUrl = {
+		...result.data,
+		pdfUrl: `${origin}/api/v1/resumes/${result.data.id}/pdf`,
+	};
+
+	return apiOk(dataWithPdfUrl);
 }
 
 export async function DELETE(

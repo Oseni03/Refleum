@@ -7,15 +7,34 @@ import { z } from "zod";
 
 // ─── Standard response constructors ──────────────────────────────────────────
 
+export function transformToSnakeCase(data: any): any {
+	if (data === null || data === undefined) {
+		return data;
+	}
+	if (Array.isArray(data)) {
+		return data.map(transformToSnakeCase);
+	}
+	if (typeof data === "object" && !(data instanceof Date)) {
+		const result: Record<string, any> = {};
+		for (const key of Object.keys(data)) {
+			const snakeKey = key.replace(/[A-Z]/g, (l) => `_${l.toLowerCase()}`);
+			result[snakeKey] = data[key];
+		}
+		return result;
+	}
+	return data;
+}
+
 /** Success: { data: T } */
 export function apiOk<T>(data: T, status = 200): NextResponse {
-	return NextResponse.json({ data }, { status });
+	return NextResponse.json({ data: transformToSnakeCase(data) }, { status });
 }
 
 /** Created: { data: T } with 201 */
 export function apiCreated<T>(data: T): NextResponse {
-	return NextResponse.json({ data }, { status: 201 });
+	return NextResponse.json({ data: transformToSnakeCase(data) }, { status: 201 });
 }
+
 
 /** Error: { error: code } */
 export function apiError(
