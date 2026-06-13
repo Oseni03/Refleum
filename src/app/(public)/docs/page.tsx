@@ -245,12 +245,12 @@ export default function DocsPage(): React.ReactElement {
                                 <div className="flex-1 space-y-2">
                                     <p className="text-sm font-medium text-foreground">Tailor to a job description</p>
                                     <CodeBlock language="bash" code={`curl -X POST ${process.env.NEXT_PUBLIC_APP_URL}/api/v1/resumes/{resume_id}/tailor \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "jobDescription": "We are looking for a Senior Software Engineer...",
-    "strategy": "keywords",
-    "generate_cover_letter": true
+   -H "Authorization: Bearer YOUR_API_KEY" \\
+   -H "Content-Type: application/json" \\
+   -d '{
+    "job_description": "We are looking for a Senior Software Engineer...",
+    "strategy": "KEYWORDS",
+    "generate_pdf": true
   }'`} />
                                 </div>
                             </div>
@@ -355,11 +355,11 @@ Retry-After: 42   # only present on 429`} />
                         <h2 className="text-xl font-bold text-foreground border-b border-border pb-3">Resumes</h2>
 
                         <div id="resume-upload" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="resume-upload-header" method="POST" path="/api/v1/resumes" description="Upload a PDF or DOCX resume (≤ 4 MB) via multipart/form-data. The file is parsed to structured JSON via LLM. Accepts an optional set_as_master boolean. If no master exists for the org, the uploaded resume is automatically designated master." />
+                            <SectionHeader id="resume-upload-header" method="POST" path="/api/v1/resumes" description="Upload a PDF or DOCX resume (≤ 10 MB) via multipart/form-data. The file is parsed to structured JSON via LLM in the background — the record is returned immediately with status PROCESSING. Accepts an optional set_as_master boolean. If no master exists for the org, the uploaded resume is automatically designated master." />
                             <div className="space-y-3 px-1">
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Request — multipart/form-data</p>
                                 <table className="w-full"><tbody>
-                                    <ParamRow name="file" type="File" required desc="PDF or DOCX file. Max 4 MB." />
+                                    <ParamRow name="file" type="File" required desc="PDF or DOCX file. Max 10 MB." />
                                     <ParamRow name="set_as_master" type="boolean" desc="Promote this resume to master for the org. Auto-masters if no master exists." />
                                 </tbody></table>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Response — 201</p>
@@ -367,8 +367,9 @@ Retry-After: 42   # only present on 429`} />
   "data": {
     "resume_id": "res_01jwzxy8k3p5q",
     "is_master": true,
-    "status": "READY",
-    "filename": "resume.pdf"
+    "status": "PROCESSING",
+    "filename": "resume.pdf",
+    "warnings": []
   }
 }`} />
                             </div>
@@ -406,11 +407,10 @@ Retry-After: 42   # only present on 429`} />
                             <div className="space-y-3 px-1">
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Request body (application/json)</p>
                                 <table className="w-full"><tbody>
-                                    <ParamRow name="jobDescription" type="string" required desc="Full text of the job description (min 50 chars). Used for keyword extraction and tailoring." />
-                                    <ParamRow name="strategy" type='"nudge" | "keywords" | "full"' desc='nudge = minimal edits; keywords = reword bullets; full = comprehensive rewrite. Default: "nudge"' />
-                                    <ParamRow name="generate_cover_letter" type="boolean" desc="Generate and persist a CoverLetter. Default: false." />
-                                    <ParamRow name="generate_outreach" type="boolean" desc="Generate and persist an Outreach message. Default: false." />
-                                    <ParamRow name="outputLanguage" type="string" desc='BCP-47 language tag for all LLM output. Default: "en".' />
+                                    <ParamRow name="job_description" type="string" required desc="Full text of the job description. Must be between 100 and 8,000 words. Used for keyword extraction and tailoring." />
+                                    <ParamRow name="strategy" type='"NUDGE" | "KEYWORDS" | "FULL"' desc='NUDGE = minimal edits; KEYWORDS = reword bullets; FULL = comprehensive rewrite. Default: "NUDGE"' />
+                                    <ParamRow name="output_language" type="string" desc='BCP-47 language tag for all LLM output (e.g. "en", "es", "zh"). Default: "en".' />
+                                    <ParamRow name="generate_pdf" type="boolean" desc="Render and cache a PDF after tailoring completes. Default: false." />
                                 </tbody></table>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Response — 201</p>
                                 <CodeBlock language="json" code={`{
@@ -419,7 +419,7 @@ Retry-After: 42   # only present on 429`} />
     "is_master": false,
     "status": "READY",
     "filename": "resume.pdf",
-    "strategy": "keywords",
+    "strategy": "KEYWORDS",
     "job_keywords": {
       "required_skills": ["TypeScript", "React"],
       "preferred_skills": ["GraphQL"],
@@ -429,8 +429,7 @@ Retry-After: 42   # only present on 429`} />
       "seniority_level": "Senior"
     },
     "parent_id": "res_01jwzxy8k3p5q",
-    "cover_letter_id": "cl_01jx2cover",
-    "outreach_id": null,
+    "pdf_url": "https://app.refleum.com/api/v1/resumes/res_01jx2abc99def/pdf",
     "refinement_stats": {
       "passes_completed": 3,
       "keywords_injected": 5,
@@ -438,7 +437,8 @@ Retry-After: 42   # only present on 429`} />
       "alignment_violations_fixed": 0,
       "initial_match_percentage": 54.2,
       "final_match_percentage": 81.7
-    }
+    },
+    "warnings": []
   }
 }`} />
                                 <div className="rounded-lg border border-border bg-muted/20 p-4 text-xs text-muted-foreground space-y-1">
@@ -448,11 +448,16 @@ Retry-After: 42   # only present on 429`} />
                         </div>
 
                         <div id="resume-retry" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="resume-retry-header" method="POST" path="/api/v1/resumes/{id}/retry" description="Re-run LLM parsing on the stored original_markdown. Only available when status is 'failed' or 'processing'. Returns 400 INVALID_STATUS otherwise." />
+                            <SectionHeader id="resume-retry-header" method="POST" path="/api/v1/resumes/{id}/retry" description="Re-run LLM parsing on the stored markdown. Useful when status is 'FAILED'. No request body required." />
                         </div>
 
                         <div id="resume-pdf" className="scroll-mt-6 space-y-4">
-                            <SectionHeader id="resume-pdf-header" method="GET" path="/api/v1/resumes/{id}/pdf" description="Public PDF viewer page. Embeds and renders the PDF inline." />
+                            <SectionHeader id="resume-pdf-header" method="GET" path="/api/v1/resumes/{id}/pdf" description="No authentication required. Returns the raw PDF binary (application/pdf) for the resume. Serves a cached copy when available; otherwise renders on-the-fly from stored HTML and caches the result. Use Content-Disposition: inline for preview or attachment for download." />
+                            <CodeBlock language="http" code={`HTTP/1.1 200 OK
+Content-Type: application/pdf
+Content-Disposition: inline; filename="resume.pdf"
+
+<binary PDF data>`} />
                         </div>
                     </div>
 

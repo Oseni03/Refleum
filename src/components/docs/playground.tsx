@@ -64,6 +64,18 @@ const PLAYGROUND_ENDPOINTS: PlaygroundEndpoint[] = [
         pathParams: ['id'],
     },
     {
+        id: 'patch-resume',
+        method: 'PATCH',
+        path: '/api/v1/resumes/{id}',
+        label: 'Update Resume',
+        pathParams: ['id'],
+        bodyFields: [
+            { key: 'title', label: 'Title', type: 'text', placeholder: 'Display title' },
+            { key: 'filename', label: 'Filename', type: 'text', placeholder: 'e.g. resume_v2.pdf' },
+            { key: 'status', label: 'Status', type: 'select', options: ['PROCESSING', 'READY', 'FAILED'] },
+        ],
+    },
+    {
         id: 'delete-resume',
         method: 'DELETE',
         path: '/api/v1/resumes/{id}',
@@ -77,11 +89,10 @@ const PLAYGROUND_ENDPOINTS: PlaygroundEndpoint[] = [
         label: 'Tailor Resume',
         pathParams: ['id'],
         bodyFields: [
-            { key: 'job_description', label: 'Job Description', type: 'textarea', required: true, placeholder: 'Paste the full job description here…' },
+            { key: 'job_description', label: 'Job Description', type: 'textarea', required: true, placeholder: 'Paste the full job description here… (100–8,000 words)' },
             { key: 'strategy', label: 'Strategy', type: 'select', options: ['NUDGE', 'KEYWORDS', 'FULL'], defaultValue: 'NUDGE' },
-            { key: 'generate_cover_letter', label: 'Generate cover letter', type: 'boolean', defaultValue: false },
-            { key: 'generate_outreach', label: 'Generate outreach', type: 'boolean', defaultValue: false },
             { key: 'output_language', label: 'Output language', type: 'select', options: ['en', 'es', 'zh', 'ja', 'pt'], defaultValue: 'en' },
+            { key: 'generate_pdf', label: 'Generate PDF', type: 'boolean', defaultValue: false },
         ],
     },
     {
@@ -97,9 +108,6 @@ const PLAYGROUND_ENDPOINTS: PlaygroundEndpoint[] = [
         path: '/api/v1/resumes/{id}/pdf',
         label: 'Get Resume PDF',
         pathParams: ['id'],
-        queryFields: [
-            { key: 'format', label: 'format', type: 'text', placeholder: 'Optional' },
-        ],
     },
     {
         id: 'list-cl',

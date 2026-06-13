@@ -5,19 +5,33 @@ import { getResumeById } from "./resumes";
 import { getCoverLetterById } from "./cover-letters";
 
 export type PdfFormat = "A4" | "Letter";
+const isDev =
+	process.env.NODE_ENV === "development" || process.env.IS_LOCAL === "true";
 
 export async function generatePdfFromHtml(
 	htmlContent: string,
 	format: PdfFormat = "A4",
 ) {
-	const executablePath = await chromium.executablePath();
+	let browser;
 
-	const browser = await puppeteer.launch({
-		args: chromium.args,
-		defaultViewport: null,
-		executablePath,
-		headless: true,
-	});
+	if (isDev) {
+		// Local development: Use the full 'puppeteer' package (includes Chromium)
+		const puppeteerFull = await import("puppeteer");
+		browser = await puppeteerFull.launch({
+			headless: true,
+			// You can add args: ['--no-sandbox'] if you run into issues locally
+		});
+	} else {
+		// Production (Vercel, etc.)
+		const executablePath = await chromium.executablePath();
+
+		browser = await puppeteer.launch({
+			args: chromium.args,
+			defaultViewport: null,
+			executablePath,
+			headless: true,
+		});
+	}
 
 	try {
 		const page = await browser.newPage();

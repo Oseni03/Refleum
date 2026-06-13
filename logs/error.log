@@ -1,0 +1,12 @@
+2026-06-13 13:21:21:2121 [31merror[39m: [31mError fetching resume by id[39m
+2026-06-13 13:21:21:2121 [31merror[39m: [31mFailed to get resume cmp8hyvx70001i4hg8g5w5i6v[39m
+2026-06-13 13:25:38:2538 [31merror[39m: [31mError fetching resume by id[39m
+2026-06-13 13:25:38:2538 [31merror[39m: [31mFailed to get resume cmp4j012v0000i4m8m7qdbrr4[39m
+2026-06-13 13:26:32:2632 [31merror[39m: [31mError fetching resume by id[39m
+2026-06-13 13:26:32:2632 [31merror[39m: [31mFailed to get resume cmp8hyvx70001i4hg8g5w5i6v[39m
+2026-06-13 13:32:12:3212 [31merror[39m: [31mError fetching resume by id[39m
+2026-06-13 13:32:12:3212 [31merror[39m: [31mFailed to get resume cmp8hyvx70001i4hg8g5w5i6v[39m
+2026-06-13 13:34:26:3426 [31merror[39m: [31mError fetching resume by id[39m
+2026-06-13 13:34:26:3426 [31merror[39m: [31mFailed to get resume cmp8hyvx70001i4hg8g5w5i6v[39m
+{"error":{"clientVersion":"6.16.2","name":"PrismaClientValidationError"},"level":"error","message":"Error fetching resume by id","organizationId":"cmp4j012v0000i4m8m7qdbrr4","resumeId":"cmp8hyvx70001i4hg8g5w5i6v","timestamp":"2026-06-13 13:41:50:757"}
+{"error":"INTERNAL_ERROR","level":"error","message":"Failed to get resume cmp8hyvx70001i4hg8g5w5i6v","organizationId":"cmp4j012v0000i4m8m7qdbrr4","timestamp":"2026-06-13 13:41:50:767"}

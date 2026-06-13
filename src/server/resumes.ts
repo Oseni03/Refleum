@@ -14,6 +14,7 @@ import { refineResume } from "@/lib/refiner";
 import { restoreDatesFromMarkdown } from "@/lib/resume-utils";
 import { cacheResumePdf, generatePdfFromHtml } from "@/server/pdf";
 import { ApiErrorCode } from "@/lib/api";
+import logger from "@/lib/logger";
 
 // Shared select shape
 const resumeSelect = {
@@ -31,7 +32,7 @@ const resumeSelect = {
 	strategy: true,
 	title: true,
 	outputLanguage: true,
-	warnings: true,
+	// warnings: true,
 	createdAt: true,
 	updatedAt: true,
 } as const;
@@ -68,13 +69,25 @@ export async function getResumeById(
 	organizationId: string,
 ): Promise<ServerActionResult<ResumeRecord>> {
 	try {
+		logger.debug(`Fetching resume`, { resumeId, organizationId });
+
 		const resume = await prisma.resume.findFirst({
 			where: { id: resumeId, organizationId },
 			select: resumeSelect,
 		});
-		if (!resume) return { success: false, error: "NOT_FOUND" };
+
+		if (!resume) {
+			logger.warn(`Resume not found`, { resumeId, organizationId });
+			return { success: false, error: "NOT_FOUND" };
+		}
+
 		return { success: true, data: resume };
 	} catch (e) {
+		logger.error(`Error fetching resume by id`, {
+			resumeId,
+			organizationId,
+			error: e,
+		});
 		return { success: false, error: "INTERNAL_ERROR" };
 	}
 }
@@ -85,6 +98,8 @@ export async function listResumes(
 	params: { limit: number; offset: number } = { limit: 10, offset: 0 },
 ): Promise<ServerActionResult<ResumeListRecord[]>> {
 	try {
+		logger.debug(`Fetching resume`, { organizationId, includeMaster });
+
 		const resumes = await prisma.resume.findMany({
 			where: {
 				organizationId,
@@ -95,8 +110,17 @@ export async function listResumes(
 			take: params.limit,
 			skip: params.offset,
 		});
+
+		logger.debug(`Retrieved resumes`, {
+			organizationId,
+			count: resumes.length,
+		});
 		return { success: true, data: resumes };
 	} catch (e) {
+		logger.error(`Error fetching resume list`, {
+			organizationId,
+			error: e,
+		});
 		return { success: false, error: "INTERNAL_ERROR" };
 	}
 }
@@ -123,6 +147,12 @@ export async function createResumeRecord(input: {
 				where: { organizationId: input.organizationId, isMaster: true },
 				select: { id: true },
 			}));
+
+		logger.info(`Creating resume record`, {
+			organizationId: input.organizationId,
+			isMaster: shouldBeMaster,
+			title: input.title,
+		});
 
 		if (shouldBeMaster) {
 			const result = await prisma.$transaction(async (tx) => {
@@ -153,6 +183,10 @@ export async function createResumeRecord(input: {
 		});
 		return { success: true, data: result };
 	} catch (e) {
+		logger.error(`Error creating resume record`, {
+			organizationId: input.organizationId,
+			error: e,
+		});
 		return { success: false, error: "INTERNAL_ERROR" };
 	}
 }
@@ -168,19 +202,38 @@ export async function updateResumeRecord(
 	}>,
 ): Promise<ServerActionResult<ResumeRecord>> {
 	try {
+		logger.info(`Updating resume`, {
+			resumeId,
+			organizationId,
+			fields: Object.keys(updates),
+		});
+
 		const existing = await prisma.resume.findFirst({
 			where: { id: resumeId, organizationId },
 			select: { id: true },
 		});
-		if (!existing) return { success: false, error: "NOT_FOUND" };
+		if (!existing) {
+			logger.warn(`Resume not found for update`, {
+				resumeId,
+				organizationId,
+			});
+			return { success: false, error: "NOT_FOUND" };
+		}
 
 		const result = await prisma.resume.update({
 			where: { id: resumeId, organizationId },
 			data: updates,
 			select: resumeSelect,
 		});
+
+		logger.info(`Resume updated`, { resumeId, organizationId });
 		return { success: true, data: result };
 	} catch (e) {
+		logger.error(`Error updating resume`, {
+			resumeId,
+			organizationId,
+			error: e,
+		});
 		return { success: false, error: "INTERNAL_ERROR" };
 	}
 }
@@ -190,15 +243,34 @@ export async function deleteResumeRecord(
 	organizationId: string,
 ): Promise<ServerActionResult<{ success: true }>> {
 	try {
+		logger.info(`Deleting resume`, { resumeId, organizationId });
+
 		const existing = await prisma.resume.findFirst({
 			where: { id: resumeId, organizationId },
 			select: { id: true },
 		});
-		if (!existing) return { success: false, error: "NOT_FOUND" };
 
-		await prisma.resume.delete({ where: { id: resumeId } });
+		if (!existing) {
+			logger.warn(`Resume not found for delete`, {
+				resumeId,
+				organizationId,
+			});
+			return { success: false, error: "NOT_FOUND" };
+		}
+
+		await prisma.resume.delete({ where: { id: resumeId, organizationId } });
+
+		logger.info(`Resume deleted successfully`, {
+			resumeId,
+			organizationId,
+		});
 		return { success: true, data: { success: true } };
 	} catch (e) {
+		logger.error(`Error deleting resume`, {
+			resumeId,
+			organizationId,
+			error: e,
+		});
 		return { success: false, error: "INTERNAL_ERROR" };
 	}
 }
@@ -262,6 +334,13 @@ export async function tailorResume(
 		generatePdf?: boolean;
 	},
 ): Promise<ServerActionResult<TailorResult>> {
+	logger.info(`Starting resume tailoring`, {
+		organizationId,
+		resumeId: input.resumeId,
+		strategy: input.strategy,
+		generatePdf: input.generatePdf,
+	});
+
 	try {
 		// Resolve source resume — use provided ID or fall back to org master (FR-022)
 		const originalRecord = await prisma.resume.findFirst({
@@ -300,6 +379,11 @@ export async function tailorResume(
 		);
 		const keywords = keywordResult.success ? keywordResult.data : {};
 
+		logger.debug(`Extracted keywords from job description`, {
+			organizationId,
+			keywordCount: Object.keys(keywords).length,
+		});
+
 		// Step 2: Primary Tailoring Pass
 		const promptKey =
 			strategy.toLowerCase() as keyof typeof IMPROVE_RESUME_PROMPTS;
@@ -329,6 +413,11 @@ export async function tailorResume(
 			return { success: false, error: "PRIMARY_TAILORING_FAILED" };
 
 		let diffsApplied = 0;
+
+		logger.info(`Primary tailoring completed`, {
+			organizationId,
+			resumeId: sourceId,
+		});
 
 		// Step 3 & 4: Multi-Pass Refinement Pipeline (FR-047, FR-051)
 		const refinementResult = await refineResume(organizationId, {
@@ -378,6 +467,12 @@ export async function tailorResume(
 			personalInfo: (original.data.structuredData as any).personalInfo,
 		};
 
+		logger.info(`Refinement completed`, {
+			organizationId,
+			diffsApplied,
+			warningsCount: warnings.length,
+		});
+
 		// Step 5: Persist the tailored resume atomically (FR-025)
 		const saveResult = await createResumeRecord({
 			organizationId,
@@ -414,6 +509,12 @@ export async function tailorResume(
 			}
 		}
 
+		logger.info(`Tailored resume saved`, {
+			newResumeId: tailoredResume.id,
+			parentId: sourceId,
+			organizationId,
+		});
+
 		return {
 			success: true,
 			data: {
@@ -435,6 +536,11 @@ export async function tailorResume(
 			},
 		};
 	} catch (e) {
+		logger.error(`Tailoring process failed`, {
+			organizationId,
+			inputResumeId: input.resumeId,
+			error: e,
+		});
 		return { success: false, error: "TAILORING_PROCESS_FAILED" };
 	}
 }
